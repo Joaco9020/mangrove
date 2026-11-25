@@ -12,6 +12,20 @@ tuned for 8 GB NVIDIA cards and an easy-to-read status window.
 > your own copy of the game. Not affiliated with or endorsed by its developer
 > or publisher.
 
+## How mangrove differs from victory-fork
+
+| On an RTX 3070 8 GB | victory-fork alone | mangrove |
+|---|---|---|
+| Opening cinematic | fork-based builds without the hook stopped about 6-8 minutes in, in every long run on this PC (3 of 3; `0x80000003`, pool full, the stop VIctory #698 reports on AMD, NVIDIA and Linux) | plays past it: `pool_asserts.rs` (mangrove's own code) disarms the 2,622 pool-empty stops it finds in the mapped title |
+| Gameplay | not reached on this PC | reached: the prologue's HUD help prompt, pad input moves Lucia |
+| `bcryptprimitives.dll!ProcessPrng` | ends the run when called | allowed (host policy) |
+| Frame rate in the prologue | 1.6 fps (launcher settings of the 8 GB tips) | 2.5 fps (`pc\settings.bat`, measured over five overnight runs) |
+| Before the first run | shaders translate while playing (black first run) | `victory warm` / `pc\warm.bat` pre-translates every shader and pre-builds compute pipelines |
+| Keyboard and mouse | keyboard as a pad | plus mouse-look, mouse-button triggers, Tab/Space/Shift mappings |
+
+mangrove's own changes are listed with commit ids in [CHANGELOG.md](CHANGELOG.md);
+everything else is victory-fork, merged as it updates.
+
 ## Status (2026-11-25)
 
 **GTA VI gameplay on an RTX 3070 8 GB:** after the opening cinematic the prologue hands control to the player: the HUD help prompt ("Approach a cellmate to interact with them") shows and keyboard pad input moves Lucia and the camera, about 45 minutes in, at 1-2 fps.
