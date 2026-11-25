@@ -14,6 +14,8 @@ tuned for 8 GB NVIDIA cards and an easy-to-read status window.
 
 ## Status (2026-11-25)
 
+**GTA VI gameplay on an RTX 3070 8 GB:** after the opening cinematic the prologue hands control to the player: the HUD help prompt ("Approach a cellmate to interact with them") shows and keyboard pad input moves Lucia and the camera, about 45 minutes in, at 1-2 fps.
+
 **GTA VI on an RTX 3070 8 GB:** boots through the intro and title screen at 30 fps, then the prologue's opening cinematic renders in 3D in the world, and keeps playing past the 8-minute stop (21+ minutes, frame 3,500+).
 
 Tested on Windows 11 with an **NVIDIA GeForce RTX 3070 (8 GB)**, Ryzen 5 2600, 32 GB RAM:
@@ -22,6 +24,7 @@ Tested on Windows 11 with an **NVIDIA GeForce RTX 3070 (8 GB)**, Ryzen 5 2600, 3
 |---|---|
 | Boot, first-boot setup (subtitles, language), menus | ✅ works, 30 fps |
 | Opening credits | ✅ render in colour |
+| Gameplay (prologue, prison yard) | ✅ the player has control: HUD help prompt, keyboard pad input moves Lucia (1-2 fps) |
 | The 8-minute stop (pool full, VIctory #698) | ✅ **passed with `VICTORY_POOL_NO_ASSERT=1`**: 21+ min, title frame 3,500+ (reports stop at 920-1,480), 3D cinematic still playing, 1.6 fps, no crash (RTX 3070 8 GB, 2026-11-25) |
 | Opening cinematic | 🟡 **renders in 3D** once the shader cache is warm; flickers in places |
 | Frame rate | 🟡 30 fps in menus; low single digits in 3D scenes |
@@ -29,6 +32,12 @@ Tested on Windows 11 with an **NVIDIA GeForce RTX 3070 (8 GB)**, Ryzen 5 2600, 3
 
 ![Opening cinematic in 3D on an RTX 3070 8 GB](docs/screenshots/opening-cinematic-rtx3070.jpg)
 *Opening cinematic in 3D on an RTX 3070 8 GB (warm cache).*
+
+![Gameplay: HUD help prompt in the prison yard](docs/screenshots/gameplay-prison-hud-rtx3070.jpg)
+*Gameplay: the HUD help prompt after the cinematic.*
+
+![Before and after holding W for 10 s](docs/screenshots/gameplay-w-before-after.jpg)
+*Top: before; bottom: after holding W for 10 seconds (1-2 fps).*
 
 ![Past the 8-minute stop: frame 3,000](docs/screenshots/past-8-minute-stop-frame3000.jpg)
 *Frame 3,000, past the point where the game used to stop itself (`VICTORY_POOL_NO_ASSERT=1`).*
