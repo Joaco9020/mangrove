@@ -16,7 +16,7 @@ tuned for 8 GB NVIDIA cards and an easy-to-read status window.
 
 **GTA VI gameplay on an RTX 3070 8 GB:** after the opening cinematic the prologue hands control to the player: the HUD help prompt ("Approach a cellmate to interact with them") shows and keyboard pad input moves Lucia and the camera, about 45 minutes in, at 1-2 fps.
 
-**GTA VI on an RTX 3070 8 GB:** boots through the intro and title screen at 30 fps, then the prologue's opening cinematic renders in 3D in the world, and keeps playing past the 8-minute stop (21+ minutes, frame 3,500+).
+**GTA VI on an RTX 3070 8 GB:** boots through the intro and title screen at 30 fps, then the prologue's opening cinematic renders in 3D in the world, and keeps playing past the 8-minute stop (three overnight runs of 60-90 minutes, up to frame 11,000+, 2.3 fps with `pcsettings.bat`).
 
 Tested on Windows 11 with an **NVIDIA GeForce RTX 3070 (8 GB)**, Ryzen 5 2600, 32 GB RAM:
 
@@ -25,7 +25,7 @@ Tested on Windows 11 with an **NVIDIA GeForce RTX 3070 (8 GB)**, Ryzen 5 2600, 3
 | Boot, first-boot setup (subtitles, language), menus | ✅ works, 30 fps |
 | Opening credits | ✅ render in colour |
 | Gameplay (prologue, prison yard) | ✅ the player has control: HUD help prompt, keyboard pad input moves Lucia (1-2 fps) |
-| The 8-minute stop (pool full, VIctory #698) | ✅ **passed with `VICTORY_POOL_NO_ASSERT=1`**: 21+ min, title frame 3,500+ (reports stop at 920-1,480), 3D cinematic still playing, 1.6 fps, no crash (RTX 3070 8 GB, 2026-11-25) |
+| The 8-minute stop (pool full, VIctory #698) | ✅ **passed with `VICTORY_POOL_NO_ASSERT=1`**: three runs of 60-90 min, up to title frame 11,298 (reports stop at 920-1,480), no crash (RTX 3070 8 GB, 2026-11-25) |
 | Opening cinematic | 🟡 **renders in 3D** once the shader cache is warm; flickers in places |
 | Frame rate | 🟡 30 fps in menus; 2.3 fps in the prologue (RTX 3070, Ryzen 5 2600) |
 | Known problems | ❌ anything in shadow is black (the game's ray-traced lighting does not run yet); subtitles flicker; the first run is mostly black while shaders and pipelines are built (they are cached after that, so each run shows more) |
