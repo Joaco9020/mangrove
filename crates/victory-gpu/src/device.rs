@@ -388,11 +388,35 @@ extern "system" fn unknown_pipeline<const SLOT: usize>(
         let first = description
             .as_ref()
             .and_then(|w| words(w[0] as usize));
+        // What each pointer-like word of the description points at: its first
+        // four bytes as text (a shader container starts `DXBC`) and the u32 at
+        // byte 24 (a container's total size), to find the shaders among them.
+        #[cfg(windows)]
+        let pointed: Vec<String> = description
+            .iter()
+            .flatten()
+            .enumerate()
+            .filter(|&(_, &w)| w > 0x1_0000 && w < 0x8000_0000_0000)
+            .filter_map(|(i, &w)| {
+                let mut head = [0u8; 28];
+                crate::host::read_into(w as *const u8, &mut head).then(|| {
+                    let magic: String = head[..4]
+                        .iter()
+                        .map(|&b| if b.is_ascii_graphic() { b as char } else { '.' })
+                        .collect();
+                    let size = u32::from_le_bytes([head[24], head[25], head[26], head[27]]);
+                    format!("{i}:{magic}/{size:#x}")
+                })
+            })
+            .collect();
+        #[cfg(not(windows))]
+        let pointed: Vec<String> = Vec::new();
         tracing::warn!(
             slot = format_args!("{:#x}", SLOT),
             calls,
             description = format_args!("{description:x?}"),
             first_points_at = format_args!("{first:x?}"),
+            pointed = format_args!("{pointed:?}"),
             "a pipeline creation method that is not implemented: the title goes without this pipeline"
         );
     }
