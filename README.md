@@ -74,6 +74,18 @@ so **no list derived from the game is shipped**. It runs only on the build it
 was checked on, and it is a workaround: a caller that does not expect null
 could still fault later.
 
+## Troubleshooting
+
+| You see | What it is | What to do |
+|---|---|---|
+| The game closes about 6-8 minutes into the opening cinematic, exit code `-2147483645` (`0x80000003`) | the title's pool allocator stops on an empty `INSTANCE_LIST` pool (VIctory #698) | keep `VICTORY_POOL_NO_ASSERT=1` (on in `play.bat`) |
+| The first run is mostly black, objects pop in | shaders and pipelines are still being built | run `victory warm` once, then let the first run play; every run after starts warmer |
+| "unimplemented import `bcryptprimitives.dll!ProcessPrng`" right after start | a Windows function the title calls that has no stand-in yet | report it with the log; it ends the run |
+| Windows error 1455 in `crashes.log` | Windows ran out of commit memory | raise the paging file (the title commits about 20 GB) |
+| The easy view says "card has no room", textures stay blurry or blank | an 8 GB card is full; textures wait their turn | close other GPU programs; `VICTORY_TEXTURE_ROOM_PERCENT` (50-97, default 90) trades buffer room for texture room |
+| A yellow "driver refused one effect program" note | a few effect pipelines the NVIDIA driver rejects | harmless: the game skips that effect |
+| Shadows and indoor areas are black | the title's ray-traced lighting is not emulated yet | nothing yet; no PC build runs it |
+
 ## Requirements
 
 - Windows 10/11 x64, a CPU with AVX2
