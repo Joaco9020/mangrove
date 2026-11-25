@@ -69,12 +69,22 @@ left stick).
 
 ## Credits
 
-All of the emulation work is by Marvisak and the VIctory contributors, and by
-hyphennn (victory-fork). mangrove only adds the launcher, the easy view and the
-8 GB NVIDIA settings. The fork's own README is kept in
+mangrove only adds a launcher, the easy view and 8 GB NVIDIA settings. **All of
+the emulation work belongs to these people:**
+
+| Who | What |
+|---|---|
+| **[Marvisak](https://github.com/Marvisak)** and the [VIctory contributors](https://github.com/Marvisak/VIctory/graphs/contributors) | [VIctory](https://github.com/Marvisak/VIctory): the compatibility layer itself (loader, system libraries, shader translation, graphics layer) |
+| **hyphennn** ([fxceless](https://github.com/fxceless)) and the [victory-fork contributors](https://github.com/fxceless/victory-fork/graphs/contributors) | [victory-fork](https://github.com/fxceless/victory-fork): the rendering and speed fixes mangrove is built on |
+| **[Zettrox](https://github.com/Zettrox)** | [ztrx](https://github.com/Zettrox/ztrx): showed this code reaching the world on an 8 GB NVIDIA card (RTX 3050) |
+| **[mauri9911](https://github.com/mauri9911)** | [leonida-victory](https://github.com/mauri9911/leonida-victory): testing help and NVIDIA shortcuts |
+| The people who reported victory-fork issues #269 and #310 | found the texture-guard and shader-optimiser switches used in `play.bat` |
+| **[4lwayz](https://github.com/4lwayz)** | [PortWatch VI](https://portwatch-vi.xyz), which tracks all of these efforts |
+
+The fork's own README is kept in
 [`docs/victory-fork-README.md`](docs/victory-fork-README.md).
 
-Made with AI assistance (Claude Code).
+Made with AI assistance ([Claude Code](https://claude.com/claude-code)).
 
 ## License
 
