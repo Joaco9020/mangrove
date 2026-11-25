@@ -4,7 +4,7 @@ rem (a plain-English status window) instead of the raw log. The game window goes
 rem second monitor. Full raw log: %TEMP%\mangrove-game.log
 rem
 rem Set GAME to your own copy of the game's executable (no game files come with this repo).
-set GAME=C:\path\to\your\game\game_scarlett_master.exe
+if not defined GAME set GAME=C:\path\to\your\game\game_scarlett_master.exe
 if not exist "%GAME%" (
   echo Edit pc\play.bat and set GAME to your own game executable first.
   pause
