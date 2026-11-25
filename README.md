@@ -85,7 +85,8 @@ cargo build --release -p victory
 ## Play
 
 1. Open `pc\play.bat` in a text editor and set `GAME=` to your own game executable.
-2. Optional, once: `targeteleaseictory.exe warm <game folder>\shaders.rpf <game folder>\game_scarlett_master.exe` (with the same `VICTORY_*` settings and cache folder as `play.bat`) to pre-build shaders.
+2. Optional, once: `target\release\victory.exe warm <game folder>\shaders.rpf <game folder>\game_scarlett_master.exe` (with the same `VICTORY_*` settings and cache folder as `play.bat`) to pre-build shaders.
+eleaseictory.exe warm <game folder>\shaders.rpf <game folder>\game_scarlett_master.exe` (with the same `VICTORY_*` settings and cache folder as `play.bat`) to pre-build shaders.
 3. Double-click `pc\play.bat`.
 4. Leave the opening cinematic running for a while on the first run: the 3D
    fills in as pipelines are built and saved. The **Skipped** number in the easy
