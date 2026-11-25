@@ -1,6 +1,6 @@
 # mangrove
 
-**mangrove** runs the Xbox Series build of the game natively on Windows PCs with
+**mangrove** runs the Xbox Series X|S (GDK) build of GTA VI natively on Windows PCs with
 **8 GB NVIDIA graphics cards**, from game files you supply yourself. It is
 [hyphennn's victory-fork](https://github.com/fxceless/victory-fork) (itself a fork
 of [Marvisak's VIctory](https://github.com/Marvisak/VIctory)) with settings
@@ -18,11 +18,11 @@ Tested on Windows 11 with an **NVIDIA GeForce RTX 3070 (8 GB)**, Ryzen 5 2600, 3
 
 | | |
 |---|---|
-| Boot, first-boot setup (subtitles, language), menus | works, 30 fps |
-| Opening credits | render in colour |
-| Opening cinematic | **renders in 3D** once the shader cache is warm; flickers in places |
-| Frame rate | 30 fps in menus; low single digits in 3D scenes |
-| Known problems | anything in shadow is black (the game's ray-traced lighting does not run yet); subtitles flicker; the first run is mostly black while shaders and pipelines are built (they are cached after that, so each run shows more) |
+| Boot, first-boot setup (subtitles, language), menus | ✅ works, 30 fps |
+| Opening credits | ✅ render in colour |
+| Opening cinematic | 🟡 **renders in 3D** once the shader cache is warm; flickers in places |
+| Frame rate | 🟡 30 fps in menus; low single digits in 3D scenes |
+| Known problems | ❌ anything in shadow is black (the game's ray-traced lighting does not run yet); subtitles flicker; the first run is mostly black while shaders and pipelines are built (they are cached after that, so each run shows more) |
 
 ## What mangrove adds
 
@@ -74,7 +74,7 @@ the emulation work belongs to these people:**
 
 | Who | What |
 |---|---|
-| **[Marvisak](https://github.com/Marvisak)** and the [VIctory contributors](https://github.com/Marvisak/VIctory/graphs/contributors) | [VIctory](https://github.com/Marvisak/VIctory): the compatibility layer itself (loader, system libraries, shader translation, graphics layer) |
+| **[Marvisak](https://github.com/Marvisak)** and the [VIctory contributors](https://github.com/Marvisak/VIctory/graphs/contributors) | [VIctory](https://github.com/Marvisak/VIctory): the compatibility layer itself (PE loader, kernelx / xgameruntime stand-ins, RDNA2 shader translation to DXIL, D3D12.X graphics layer) |
 | **hyphennn** ([fxceless](https://github.com/fxceless)) and the [victory-fork contributors](https://github.com/fxceless/victory-fork/graphs/contributors) | [victory-fork](https://github.com/fxceless/victory-fork): the rendering and speed fixes mangrove is built on |
 | **[Zettrox](https://github.com/Zettrox)** | [ztrx](https://github.com/Zettrox/ztrx): showed this code reaching the world on an 8 GB NVIDIA card (RTX 3050) |
 | **[mauri9911](https://github.com/mauri9911)** | [leonida-victory](https://github.com/mauri9911/leonida-victory): testing help and NVIDIA shortcuts |
