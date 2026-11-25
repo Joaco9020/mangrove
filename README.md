@@ -94,6 +94,24 @@ could still fault later.
   finds 2,622 pool-empty sites (a superset of the 2,205 a full disassembly
   reports).
 
+## Known limits
+
+- **About 340 draws per frame are dropped** in the prologue. They are not
+  translation failures (only 2 compute shaders fail to translate). The title
+  creates those pipelines through two D3D12.X device methods (vtable slots
+  `0x1c8` and `0x218`) that no PC layer implements yet. Logging what their
+  descriptions point at (946014c) shows a root signature, a 0x180-0x340-byte
+  block in GPU memory (the console's precompiled native shader code), a
+  0x118-0x1d8-byte state block and two further title structures, and no DXBC
+  containers: writing them means translating native GFX10 programs and
+  decoding that state block.
+- **Shadows and indoor light are black**: the title's ray-traced lighting is
+  not emulated.
+- **An 8 GB card runs out of texture room**: about 16,000 textures wait for
+  room at any time in the prologue (`VICTORY_TEXTURE_ROOM_PERCENT` trades
+  buffer room for texture room).
+- **2-2.5 fps** in the prologue on an RTX 3070 / Ryzen 5 2600.
+
 ## Troubleshooting
 
 | You see | What it is | What to do |
