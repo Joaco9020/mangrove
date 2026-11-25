@@ -27,7 +27,7 @@ Tested on Windows 11 with an **NVIDIA GeForce RTX 3070 (8 GB)**, Ryzen 5 2600, 3
 | Gameplay (prologue, prison yard) | ✅ the player has control: HUD help prompt, keyboard pad input moves Lucia (1-2 fps) |
 | The 8-minute stop (pool full, VIctory #698) | ✅ **passed with `VICTORY_POOL_NO_ASSERT=1`**: 21+ min, title frame 3,500+ (reports stop at 920-1,480), 3D cinematic still playing, 1.6 fps, no crash (RTX 3070 8 GB, 2026-11-25) |
 | Opening cinematic | 🟡 **renders in 3D** once the shader cache is warm; flickers in places |
-| Frame rate | 🟡 30 fps in menus; low single digits in 3D scenes |
+| Frame rate | 🟡 30 fps in menus; 2.3 fps in the prologue (RTX 3070, Ryzen 5 2600) |
 | Known problems | ❌ anything in shadow is black (the game's ray-traced lighting does not run yet); subtitles flicker; the first run is mostly black while shaders and pipelines are built (they are cached after that, so each run shows more) |
 
 Screenshots and video stay out of this repository (no game content, per
@@ -49,7 +49,8 @@ Settings used by `play.bat`:
 |---|---|
 | `VICTORY_TEXTURE_GUARD=0` | stops repeated/flickering frames on NVIDIA (fork issue #269) |
 | `VICTORY_SHADER_OPT=0` | removes black mosaic blocks (#310) |
-| `VICTORY_CARD_BUFFERS_MB=512` | keeps card buffers inside 8 GB of video memory |
+| `VICTORY_TEXTURE_ROOM_PERCENT=94` | more of an 8 GB card for textures (textures waiting for room: 25,846 -> 16,357) |
+| `VICTORY_LATE_WAIT=2` | settles GPU copy-backs later: 2.3 fps instead of 1.5, copy-back 218 ms instead of 521 per frame, nothing visibly missing |
 | `VICTORY_LOG=info,…descriptor::host=error` | mutes one warning NVIDIA repeats ~300,000 times |
 
 ## Getting past the 8-minute crash

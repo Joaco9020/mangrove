@@ -4,7 +4,11 @@ set VICTORY_LOG=info,victory_gpu::descriptor::host=error
 rem NVIDIA: no repeated frames (fork #269), no black mosaic blocks (#310), card buffers sized for 8 GB
 set VICTORY_TEXTURE_GUARD=0
 set VICTORY_SHADER_OPT=0
-set VICTORY_CARD_BUFFERS_MB=512
+rem card buffers: the fork's default (1,024 MB) draws the first room's walls; 512 left textures waiting
+rem VICTORY_TEXTURE_ROOM_PERCENT=94 gives textures the room the bigger buffers take (16-26k fewer waiting)
+set VICTORY_TEXTURE_ROOM_PERCENT=94
+rem copy-backs settled later: 2.3 fps against 1.5, copy-back 218 ms against 498 (RTX 3070 overnight runs)
+set VICTORY_LATE_WAIT=2
 rem the title stops on an int3 when a fixed pool is full (~6-8 min into the opening cinematic, VIctory #698):
 rem make those allocations fail with null instead (see README, "Getting past the 8-minute crash")
 set VICTORY_POOL_NO_ASSERT=1
