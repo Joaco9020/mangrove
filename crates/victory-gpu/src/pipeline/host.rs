@@ -1226,6 +1226,19 @@ mod tests {
             eprintln!("no host depth bounds support; skipped");
             return;
         }
+        // WARP / Microsoft Basic Render (CI runners have no GPU, vendor 0x1414) reports depth bounds but lets the draw through.
+        // SAFETY: plain DXGI adapter queries on the live device's adapter.
+        let software = unsafe {
+            use windows::Win32::Graphics::Dxgi::{CreateDXGIFactory2, DXGI_ADAPTER_FLAG_SOFTWARE, DXGI_CREATE_FACTORY_FLAGS, IDXGIAdapter1, IDXGIFactory4};
+            CreateDXGIFactory2::<IDXGIFactory4>(DXGI_CREATE_FACTORY_FLAGS(0))
+                .and_then(|f| f.EnumAdapterByLuid::<IDXGIAdapter1>(host.device.GetAdapterLuid()))
+                .and_then(|a| a.GetDesc1())
+                .map_or(true, |d| d.Flags & DXGI_ADAPTER_FLAG_SOFTWARE.0 as u32 != 0 || d.VendorId == 0x1414)
+        };
+        if software {
+            eprintln!("software adapter (WARP); depth bounds not checked");
+            return;
+        }
         let Some(dxc) = dxc() else {
             eprintln!("no PC dxc.exe; skipped");
             return;
