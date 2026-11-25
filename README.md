@@ -1,10 +1,23 @@
 # mangrove
 
 **mangrove** runs the Xbox Series X|S (GDK) build of GTA VI natively on Windows PCs with
-**8 GB NVIDIA graphics cards**, from game files you supply yourself. It is
-[hyphennn's victory-fork](https://github.com/fxceless/victory-fork) (itself a fork
-of [Marvisak's VIctory](https://github.com/Marvisak/VIctory)) with settings
-tuned for 8 GB NVIDIA cards and an easy-to-read status window.
+**8 GB NVIDIA graphics cards**, from game files you supply yourself.
+
+mangrove continues the work of [Marvisak's VIctory](https://github.com/Marvisak/VIctory)
+and [hyphennn's victory-fork](https://github.com/fxceless/victory-fork) with its
+own updates, aimed at getting further on 8 GB NVIDIA cards:
+
+- **Plays past the 8-minute stop** in the opening cinematic (VIctory #698) and
+  reaches the prologue's gameplay: its own loader code disarms the title's
+  pool-empty stops (`pool_asserts.rs`).
+- **Light in the shade**: an ambient pass stands in for the ray-traced
+  indirect light, so shadowed characters are not black.
+- **Faster**: measured settings take the prologue from 1.6 to 2.6 fps.
+- **Pre-warm** of every shader before playing, **keyboard and mouse** play with
+  mouse-look, and an **easy-to-read status window**.
+
+Upstream updates are merged as they land; mangrove's own changes are listed with
+commit ids in [CHANGELOG.md](CHANGELOG.md).
 
 > [!IMPORTANT]
 > **This repository contains no game files, shaders, dumps or assets, and none
