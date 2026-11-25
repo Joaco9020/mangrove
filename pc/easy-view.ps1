@@ -27,7 +27,8 @@ while ($true) {
     if ($l -match 'dstorage') { $loads++ }
     if ($l -match 'device removed|0x887A0005') { Say Red 'PROBLEM: the graphics card reset (device removed). The game will stop.' }
     elseif ($l -match '1455|out of memory|0x8007000E') { Say Red 'PROBLEM: out of memory. Close other programs or raise the Windows paging file.' }
-    elseif ($l -match 'panic|ERROR') { Say Red ('PROBLEM: ' + ($l -replace '^\S+\s+ERROR\s+', '').Substring(0, [Math]::Min(150, $l.Length))) }
+    elseif ($l -match 'host pipeline refused') { Say Yellow 'Note: the graphics driver refused one effect program. Known and harmless: the game skips that effect.' }
+    elseif ($l -cmatch 'panic| ERROR ') { Say Red ('PROBLEM: ' + ($l -replace '^\S+\s+ERROR\s+', '').Substring(0, [Math]::Min(150, $l.Length))) }
     elseif ($l -match 'library saved') { Say Green 'Saved the built graphics programs to disk (next start is faster).' }
     elseif ($l -match 'title window|window shown') { Say Green 'The game window is open.' }
 }
