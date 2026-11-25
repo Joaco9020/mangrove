@@ -9,6 +9,8 @@ rem VICTORY_TEXTURE_ROOM_PERCENT=94 gives textures the room the bigger buffers t
 set VICTORY_TEXTURE_ROOM_PERCENT=94
 rem copy-backs settled later: 2.3 fps against 1.5, copy-back 218 ms against 498 (RTX 3070 overnight runs)
 set VICTORY_LATE_WAIT=2
+rem shorter per-frame wait for pipelines still being built (run 4: 2.5 fps against 2.3)
+set VICTORY_PIPELINE_WAIT_MS=24
 rem the title stops on an int3 when a fixed pool is full (~6-8 min into the opening cinematic, VIctory #698):
 rem make those allocations fail with null instead (see README, "Getting past the 8-minute crash")
 set VICTORY_POOL_NO_ASSERT=1
