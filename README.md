@@ -20,12 +20,16 @@ Tested on Windows 11 with an **NVIDIA GeForce RTX 3070 (8 GB)**, Ryzen 5 2600, 3
 |---|---|
 | Boot, first-boot setup (subtitles, language), menus | ✅ works, 30 fps |
 | Opening credits | ✅ render in colour |
+| The 8-minute stop (pool full, VIctory #698) | ✅ **passed with `VICTORY_POOL_NO_ASSERT=1`**: 21+ min, title frame 3,500+ (reports stop at 920-1,480), 3D cinematic still playing, 1.6 fps, no crash (RTX 3070 8 GB, 2026-11-25) |
 | Opening cinematic | 🟡 **renders in 3D** once the shader cache is warm; flickers in places |
 | Frame rate | 🟡 30 fps in menus; low single digits in 3D scenes |
 | Known problems | ❌ anything in shadow is black (the game's ray-traced lighting does not run yet); subtitles flicker; the first run is mostly black while shaders and pipelines are built (they are cached after that, so each run shows more) |
 
 ![Opening cinematic in 3D on an RTX 3070 8 GB](docs/screenshots/opening-cinematic-rtx3070.jpg)
 *Opening cinematic in 3D on an RTX 3070 8 GB (warm cache).*
+
+![Past the 8-minute stop: frame 3,000](docs/screenshots/past-8-minute-stop-frame3000.jpg)
+*Frame 3,000, past the point where the game used to stop itself (`VICTORY_POOL_NO_ASSERT=1`).*
 
 ## What mangrove adds
 
