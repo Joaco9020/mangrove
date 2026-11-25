@@ -590,6 +590,7 @@ pub(crate) fn host() -> Option<&'static Host> {
 
 fn create() -> windows::core::Result<Host> {
     crate::drvwatch::start();
+    crate::spread::start();
     // SAFETY: plain D3D12 object creation with valid descriptions.
     unsafe {
         // The debug layer only in builds with diagnostics.
@@ -741,6 +742,50 @@ pub(crate) fn warp_adapter() -> windows::core::Result<IDXGIAdapter> {
 
 #[cfg(test)]
 mod tests {
+    use super::{BUFFER_READ, BUFFER_WRITE, BufferStates};
+
+    #[test]
+    fn buffer_states_transition_between_writes_and_reads() {
+        let mut s = BufferStates::default();
+        // First uses: the prelude's.
+        assert_eq!(s.update(1, 'a', BUFFER_WRITE), None);
+        assert_eq!(s.update(2, 'b', BUFFER_READ), None);
+        assert_eq!(s.update(1, 'a', BUFFER_WRITE), None);
+        s.next_command();
+        assert_eq!(s.update(1, 'a', BUFFER_READ), Some(BUFFER_WRITE));
+        assert_eq!(s.update(1, 'a', BUFFER_READ), None);
+        s.next_command();
+        assert_eq!(s.update(1, 'a', BUFFER_WRITE), Some(BUFFER_READ));
+        let sorted = |mut v: Vec<(char, u32)>| {
+            v.sort_unstable();
+            v
+        };
+        let firsts = sorted(s.firsts().map(|(r, f)| (*r, f)).collect());
+        assert_eq!(firsts, [('a', BUFFER_WRITE), ('b', BUFFER_READ)]);
+        let lasts = sorted(s.lasts().map(|(r, l)| (*r, l)).collect());
+        assert_eq!(lasts, [('a', BUFFER_WRITE), ('b', BUFFER_READ)]);
+        s.clear();
+        assert_eq!(s.firsts().count(), 0);
+    }
+
+    /// One command that writes a copy and reads it: the write state wins
+    /// whichever is bound first; the next command reads again.
+    #[test]
+    fn buffer_states_keep_a_command_writing() {
+        let mut s = BufferStates::default();
+        s.next_command();
+        assert_eq!(s.update(1, 'a', BUFFER_WRITE), None);
+        assert_eq!(s.update(1, 'a', BUFFER_READ), None);
+        s.next_command();
+        assert_eq!(s.update(1, 'a', BUFFER_READ), Some(BUFFER_WRITE));
+        assert_eq!(s.update(1, 'a', BUFFER_WRITE), Some(BUFFER_READ));
+        assert_eq!(s.update(1, 'a', BUFFER_READ), None);
+        s.next_command();
+        assert_eq!(s.update(1, 'a', BUFFER_READ), Some(BUFFER_WRITE));
+        let lasts: Vec<_> = s.lasts().map(|(r, l)| (*r, l)).collect();
+        assert_eq!(lasts, [('a', BUFFER_READ)]);
+    }
+
     #[test]
     fn sparse_copies_preserve_islands_and_observe_remaps() {
         use windows_sys::Win32::System::Memory::*;
@@ -820,6 +865,8 @@ pub(crate) struct HostList {
     /// list names alive until it is reset, even if the title releases the
     /// resource first.
     states: Mutex<States>,
+    /// The states of the host copies of title memory the list uses.
+    buffers: Mutex<BufferStates<ID3D12Resource>>,
     /// What the list does with depth textures that have a colour twin, by
     /// twin ([`TwinUse`]).
     twins: Mutex<std::collections::HashMap<usize, TwinUse>>,
@@ -846,6 +893,9 @@ pub(crate) struct HostList {
     /// The pair of timestamps its run is timed with since its last reset
     /// (`crate::cardmeter`), or none.
     meter: AtomicU32,
+    /// With `crate::cardmeter::pipelines`: the pair of the pipeline bound
+    /// last, open until the next one is bound or the list closes.
+    pipeline_meter: AtomicU32,
     /// The texts of the markers `note_op` set, in order (for device-removed
     /// data without marker texts), with the host GPU range a copy reads.
     #[cfg(feature = "diagnostics")]
@@ -882,6 +932,90 @@ type States = std::collections::HashMap<
     usize,
     (u32, u32, std::sync::Arc<crate::resource::HostTexture>),
 >;
+
+/// Every read of a host copy of title memory (vertex, index, constant and
+/// shader-resource data, indirect counts, the argument clamp's sources).
+pub(crate) const BUFFER_READ: u32 = D3D12_RESOURCE_STATE_GENERIC_READ.0 as u32;
+/// Shader writes to a host copy of title memory.
+pub(crate) const BUFFER_WRITE: u32 = D3D12_RESOURCE_STATE_UNORDERED_ACCESS.0 as u32;
+
+/// The states of the host copies of title memory (buffers) one list uses,
+/// by copy: the state it starts in and the one it is in now (upstream
+/// VIctory #334). A buffer is in the common state between lists: the
+/// list's prelude moves it to its first state and the list moves it back
+/// before it closes. A buffer a shader writes and a later command reads
+/// (the meshlet cull's arguments and counts, vertices) is transitioned in
+/// between; the implicit promotion from common it relied on allows either
+/// use in a list, not both.
+///
+/// Within one command (a draw, a dispatch, the argument clamp) the write
+/// state wins: a copy one command both writes and reads (one host copy
+/// backs most of the title's buffers) stays writable, whatever order the
+/// command's views are bound in.
+///
+/// shortcut: buffers read only through directly indexed heaps are not
+/// tracked, and a command that both writes a buffer and reads it as
+/// vertices, indices or counts reads them in the write state.
+pub(crate) struct BufferStates<R> {
+    /// First state, current state, the command that last wrote it.
+    by_copy: std::collections::HashMap<usize, (u32, u32, Option<u64>, R)>,
+    command: u64,
+}
+
+impl<R> Default for BufferStates<R> {
+    fn default() -> Self {
+        BufferStates {
+            by_copy: std::collections::HashMap::new(),
+            command: 0,
+        }
+    }
+}
+
+impl<R> BufferStates<R> {
+    /// Uses from here on belong to the next command.
+    pub(crate) fn next_command(&mut self) {
+        self.command += 1;
+    }
+
+    /// The list uses `copy` (`resource`) in `wanted`: the state it leaves,
+    /// if a transition must be recorded now. A first use records nothing:
+    /// the prelude moves the buffer there.
+    pub(crate) fn update(&mut self, copy: usize, resource: R, wanted: u32) -> Option<u32> {
+        let command = self.command;
+        let wrote = (wanted == BUFFER_WRITE).then_some(command);
+        match self.by_copy.entry(copy) {
+            std::collections::hash_map::Entry::Vacant(v) => {
+                v.insert((wanted, wanted, wrote, resource));
+                None
+            }
+            std::collections::hash_map::Entry::Occupied(mut o) => {
+                let e = o.get_mut();
+                if wrote.is_some() {
+                    e.2 = wrote;
+                } else if e.2 == Some(command) {
+                    return None;
+                }
+                let before = std::mem::replace(&mut e.1, wanted);
+                (before != wanted).then_some(before)
+            }
+        }
+    }
+
+    /// The prelude's transitions: each buffer from common to its first state.
+    pub(crate) fn firsts(&self) -> impl Iterator<Item = (&R, u32)> {
+        self.by_copy.values().map(|(first, _, _, r)| (r, *first))
+    }
+
+    /// The list's closing transitions: each buffer from its last state back
+    /// to common.
+    pub(crate) fn lasts(&self) -> impl Iterator<Item = (&R, u32)> {
+        self.by_copy.values().map(|(_, last, _, r)| (r, *last))
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.by_copy.clear();
+    }
+}
 
 /// What a list does with a depth texture that has a colour twin
 /// ([`crate::resource::Twin`]). Lists are recorded on many threads and run
@@ -1915,6 +2049,11 @@ struct Deferred {
     /// memory they go to, the bytes of a row, the rows, the title's row
     /// pitch.
     backs: Vec<(ID3D12Resource, usize, [usize; 3])>,
+    /// Title textures of the kinds copied back ([`crate::texback`]) that
+    /// the list's shaders write, copied when the list closes.
+    back_wanted: Vec<usize>,
+    /// Those copies, whose texels go to title memory once the list has run.
+    texture_backs: Vec<crate::texback::Back>,
     /// Whether the indirect-work budget is zeroed for this recording (a
     /// step on the CPU, or in the list for the card's copy).
     budget_zeroed: bool,
@@ -3071,6 +3210,29 @@ pub(crate) fn late_met(wait: &crate::list::ValueWait) -> bool {
     wait.met()
 }
 
+/// [`late_met`] without its settle: whether a bottom-of-pipe write of a
+/// flight in the air, or of one being landed, is known to meet `wait`.
+/// False says nothing about what else the flights may write there.
+pub(crate) fn late_met_known(wait: &crate::list::ValueWait) -> bool {
+    let (address, bytes) = wait.place();
+    let line = line();
+    let writes = line.in_hand.iter().map(|(at, what, n)| (at, what, n)).chain(line.line.iter().filter_map(|item| match item {
+        Late::Write(at, what, n) => Some((at, what, n)),
+        _ => None,
+    }));
+    for (at, what, n) in writes {
+        if let crate::queue::Written::Value(v) = what
+            && *at == address
+            && *n >= bytes
+            && wait.holds_for(*v)
+        {
+            LATE_STATS[13].fetch_add(1, Ordering::Relaxed);
+            return true;
+        }
+    }
+    false
+}
+
 /// Settles the flights in the air, if any ([`Host::settle`]), for reason
 /// `why` (one of the `WHY_` places). Not from inside a submission.
 pub(crate) fn settle_now(why: usize) {
@@ -3566,6 +3728,11 @@ pub(crate) fn walls_trace() -> bool {
 /// without it, so the title read a buffer nobody wrote, as before read-backs
 /// were made (the exposure metering's two small float targets, every frame).
 fn read_backs(list: &HostList) {
+    // Textures shaders wrote that the title reads on the CPU
+    // ([`crate::texback`]).
+    for back in &list.deferred().texture_backs {
+        crate::texback::land(back);
+    }
     for (buffer, at, [row, rows, pitch]) in &list.deferred().backs {
         let mut data = std::ptr::null_mut();
         // SAFETY: a read-back buffer of ours, written by the list that has
@@ -3789,6 +3956,7 @@ impl Host {
                 deferred: Mutex::default(),
                 scratch: Mutex::default(),
                 states: Mutex::default(),
+                buffers: Mutex::default(),
                 twins: Mutex::default(),
                 prelude,
                 pipelines: Mutex::default(),
@@ -3798,6 +3966,7 @@ impl Host {
                 window_check: OnceLock::new(),
                 _alive: Counted::new(),
                 meter: AtomicU32::new(u32::MAX),
+                pipeline_meter: AtomicU32::new(u32::MAX),
                 #[cfg(feature = "diagnostics")]
                 notes: Mutex::default(),
                 #[cfg(feature = "diagnostics")]
@@ -5918,12 +6087,18 @@ impl HostList {
 
     pub(crate) fn close(&self) {
         self.twins_to_depth();
+        self.textures_back();
         let scratch = self.indirect_args.lock().unwrap_or_else(|e| e.into_inner()).clone();
         if let Some((scratch, _)) = scratch {
             self.indirect_common(&scratch);
         }
         self.card_budget_out();
-        crate::cardmeter::end(&self.list, crate::cardmeter::Span::from_raw(self.meter.swap(u32::MAX, Ordering::Relaxed)));
+        crate::cardmeter::end(&self.list, crate::cardmeter::Span::from_raw(self.pipeline_meter.swap(u32::MAX, Ordering::Relaxed)));
+        crate::cardmeter::end_named(
+            &self.list,
+            crate::cardmeter::Span::from_raw(self.meter.swap(u32::MAX, Ordering::Relaxed)),
+            &self.pipelines.lock().unwrap_or_else(|e| e.into_inner()),
+        );
         #[cfg(feature = "diagnostics")]
         if let Some((heap, back)) = self.stamps() {
             let count = (self.notes.lock().unwrap_or_else(|e| e.into_inner()).len() as u32).min(STAMPS - 1);
@@ -5932,6 +6107,20 @@ impl HostList {
                 self.list.EndQuery(heap, D3D12_QUERY_TYPE_TIMESTAMP, count);
                 self.list.ResolveQueryData(heap, D3D12_QUERY_TYPE_TIMESTAMP, 0, count + 1, back, 0);
             }
+        }
+        // The buffers it used back to common, where the next list's prelude
+        // expects them.
+        let back: Vec<D3D12_RESOURCE_BARRIER> = self
+            .buffers
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .lasts()
+            .filter(|&(_, last)| last != D3D12_RESOURCE_STATE_COMMON.0 as u32)
+            .map(|(b, last)| transition(b, D3D12_RESOURCE_STATES(last as i32), D3D12_RESOURCE_STATE_COMMON))
+            .collect();
+        if !back.is_empty() {
+            // SAFETY: an open list and buffers the list holds.
+            unsafe { self.list.ResourceBarrier(&back) };
         }
         // SAFETY: our list.
         if let Err(e) = unsafe { self.list.Close() } {
@@ -5949,6 +6138,7 @@ impl HostList {
         self._alive.used();
         *self.deferred() = Deferred::default();
         self.states.lock().unwrap_or_else(|e| e.into_inner()).clear();
+        self.buffers.lock().unwrap_or_else(|e| e.into_inner()).clear();
         self.twins.lock().unwrap_or_else(|e| e.into_inner()).clear();
         self.pipelines.lock().unwrap_or_else(|e| e.into_inner()).clear();
         #[cfg(feature = "diagnostics")]
@@ -6185,6 +6375,36 @@ impl HostList {
         }
     }
 
+    /// A draw or dispatch being prepared writes title texture `resource`
+    /// through unordered access: if it is of a kind copied back
+    /// ([`crate::texback`]), the list copies it when it closes.
+    pub(crate) fn texture_written(&self, resource: crate::object::This) {
+        if !crate::texback::wanted(resource) {
+            return;
+        }
+        let mut deferred = self.deferred();
+        if !deferred.back_wanted.contains(&(resource as usize)) {
+            deferred.back_wanted.push(resource as usize);
+        }
+    }
+
+    /// Before the list closes: the textures its shaders wrote that are copied
+    /// back go into read-back buffers ([`crate::texback::record`]).
+    fn textures_back(&self) {
+        const COPY_SOURCE: u32 = 0x800;
+        let wanted = std::mem::take(&mut self.deferred().back_wanted);
+        for resource in wanted {
+            let resource = resource as crate::object::This;
+            let Some(copy) = crate::resource::host_copy(resource) else {
+                continue;
+            };
+            self.settle(&copy, COPY_SOURCE);
+            if let Some(back) = crate::texback::record(&self.list, resource, &copy.texture) {
+                self.deferred().texture_backs.push(back);
+            }
+        }
+    }
+
     /// The draw or dispatch just prepared is recorded: the twins it writes
     /// now hold what their depth textures lack.
     pub(crate) fn twins_written(&self) {
@@ -6192,6 +6412,27 @@ impl HostList {
         for u in twins.values_mut().filter(|u| u.writing) {
             u.writing = false;
             u.behind[0] = Some(true);
+        }
+    }
+
+    /// The uses of host copies that follow belong to a new command (draw,
+    /// dispatch, argument clamp): see [`BufferStates`].
+    pub(crate) fn begin_command(&self) {
+        self.buffers.lock().unwrap_or_else(|e| e.into_inner()).next_command();
+    }
+
+    /// Moves a host copy of title memory to `wanted` ([`BUFFER_READ`] or
+    /// [`BUFFER_WRITE`]) in this list: see [`BufferStates`].
+    pub(crate) fn buffer_state(&self, buffer: &ID3D12Resource, wanted: u32) {
+        let mut buffers = self.buffers.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(before) = buffers.update(buffer.as_raw() as usize, buffer.clone(), wanted) {
+            let barrier = transition(
+                buffer,
+                D3D12_RESOURCE_STATES(before as i32),
+                D3D12_RESOURCE_STATES(wanted as i32),
+            );
+            // SAFETY: an open list and a buffer the list holds.
+            unsafe { self.list.ResourceBarrier(&[barrier]) };
         }
     }
 
@@ -6261,6 +6502,14 @@ impl HostList {
             (real != *first)
                 .then(|| transition(&copy.texture, host_state(real), host_state(*first)))
         }));
+        drop(states);
+        barriers.extend(
+            self.buffers
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .firsts()
+                .map(|(b, first)| transition(b, D3D12_RESOURCE_STATE_COMMON, host_state(first))),
+        );
         if barriers.is_empty() && syncs.is_empty() {
             return None;
         }
@@ -6351,7 +6600,8 @@ impl HostList {
                 && deferred.kept.is_empty()
                 && deferred.textures.is_empty()
                 && deferred.writes.is_empty()
-                && deferred.backs.is_empty())
+                && deferred.backs.is_empty()
+                && deferred.texture_backs.is_empty())
             {
                 return false;
             }
@@ -6360,11 +6610,18 @@ impl HostList {
             && self.twins.lock().unwrap_or_else(|e| e.into_inner()).is_empty()
     }
 
-    /// Notes a pipeline the list binds.
+    /// Notes a pipeline the list binds; called where it is bound.
     pub(crate) fn used_pipeline(&self, name: &str) {
-        let mut pipelines = self.pipelines.lock().unwrap_or_else(|e| e.into_inner());
-        if !pipelines.contains(name) {
-            pipelines.insert(name.to_owned());
+        {
+            let mut pipelines = self.pipelines.lock().unwrap_or_else(|e| e.into_inner());
+            if !pipelines.contains(name) {
+                pipelines.insert(name.to_owned());
+            }
+        }
+        if crate::cardmeter::pipelines() {
+            // The pipeline before it ends here on the card's clock.
+            crate::cardmeter::end(&self.list, crate::cardmeter::Span::from_raw(self.pipeline_meter.swap(u32::MAX, Ordering::Relaxed)));
+            self.pipeline_meter.store(crate::cardmeter::begin_named(&self.list, name).raw(), Ordering::Relaxed);
         }
     }
 
@@ -6444,6 +6701,16 @@ impl HostList {
     /// Stores `what` (`bytes` of it) at `dst` once the list has run.
     pub(crate) fn defer_write(&self, dst: *mut u8, what: crate::queue::Written, bytes: usize) {
         self.deferred().writes.push((dst as usize, what, bytes));
+    }
+
+    /// Whether the list, once it has run, stores at `address` a value of
+    /// `bytes` bytes or more for which `holds` says yes (one of its
+    /// bottom-of-pipe writes, as [`late_met`] reads them of a flight).
+    pub(crate) fn will_write(&self, address: usize, bytes: usize, holds: impl Fn(u64) -> bool) -> bool {
+        self.deferred()
+            .writes
+            .iter()
+            .any(|(at, what, n)| *at == address && *n >= bytes && matches!(what, crate::queue::Written::Value(v) if holds(*v)))
     }
 
     /// A mapped upload buffer of `size` bytes, alive until the list is
@@ -6842,9 +7109,33 @@ fn wide_refresh() -> bool {
 /// before they were submitted. A title buffer copy of ours takes its
 /// bytes out of what counts as up to date ([`Batch::title_wrote`]); any
 /// other step that writes title memory takes everything out.
+///
+/// `VICTORY_REFRESH_ONCE=alt`: twenty seconds with, twenty without, in
+/// turn, each change said in the log, so that one run measures both in
+/// the same scene (two runs do not stand in the same scene at the same
+/// second: runs 228 and 229).
 fn refresh_once() -> bool {
-    static ON: OnceLock<bool> = OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("VICTORY_REFRESH_ONCE").is_some_and(|v| v == "1"))
+    /// 0 off, 1 on, 2 in turn.
+    static MODE: OnceLock<u8> = OnceLock::new();
+    match *MODE.get_or_init(|| match std::env::var("VICTORY_REFRESH_ONCE").as_deref() {
+        Ok("1") => 1,
+        Ok("alt") => 2,
+        _ => 0,
+    }) {
+        0 => false,
+        1 => true,
+        _ => {
+            let on = (now_us() / 20_000_000) % 2 == 1;
+            static LAST: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(2);
+            if LAST.swap(u8::from(on), Ordering::Relaxed) != u8::from(on) {
+                tracing::info!(
+                    "refreshes once a submission from now (VICTORY_REFRESH_ONCE=alt): {}",
+                    if on { "ON" } else { "off, as usual" }
+                );
+            }
+            on
+        }
+    }
 }
 
 /// A submission's refreshes not done yet, merged per buffer copy into the

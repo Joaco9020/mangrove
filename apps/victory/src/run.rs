@@ -109,6 +109,10 @@ pub fn run(
     victory_loader::report_crashes();
     victory_loader::log_crashes_to(temp.with_file_name("crashes.log"));
     victory_hle::runtime::use_console_timers();
+    // Precompiled pipelines are made from their shader pack containers (`nativepack`).
+    if let Some(dir) = exe.parent() {
+        crate::nativepack::start(dir.join("shaders.rpf"), cfg.cache_subdir("native")?);
+    }
     #[cfg(feature = "diagnostics")]
     diagnostics(&image, &cfg);
     let late = LateDlls {

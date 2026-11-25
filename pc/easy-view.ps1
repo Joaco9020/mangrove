@@ -32,7 +32,7 @@ while ($true) {
     elseif ($l -match 'unimplemented import') { Say Red ('PROBLEM: the game called a Windows function VIctory does not have yet: ' + ($l -replace '.*called\s*', '')) }
     elseif ($l -match 'os error 1455|out of memory') { Say Red 'PROBLEM: out of memory. Close other programs or raise the Windows paging file.' }
     elseif ($l -match 'host pipeline refused') { Say Yellow 'Note: the graphics driver refused one effect program. Known and harmless: the game skips that effect.' }
-    elseif ($l -cmatch 'panic| ERROR ') { Say Red ('PROBLEM: ' + ($l -replace '^\S+\s+ERROR\s+', '').Substring(0, [Math]::Min(150, $l.Length))) }
+    elseif ($l -cmatch 'panic| ERROR ') { $m = $l -replace '^\S+\s+ERROR\s+', ''; Say Red ('PROBLEM: ' + $m.Substring(0, [Math]::Min(150, $m.Length))) }
     elseif ($l -match 'library saved') { Say Green 'Saved the built graphics programs to disk (next start is faster).' }
     elseif ($l -match 'title window|window shown') { Say Green 'The game window is open.' }
 }

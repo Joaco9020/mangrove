@@ -346,6 +346,25 @@ fn feature_levels(data: *mut c_void) -> HRESULT {
     }
 }
 
+/// Precompiled pipelines made from their shader pack containers, and those not found.
+static NATIVE_MADE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static NATIVE_MISSED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// `VICTORY_NATIVE_PIPELINES=0` turns off making precompiled pipelines (method 0x218) from
+/// their containers: the title goes without them, as before.
+fn native_pipelines() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("VICTORY_NATIVE_PIPELINES").is_none_or(|v| v != "0"))
+}
+
+/// `VICTORY_NATIVE_GRAPHICS=1` makes precompiled graphics pipelines (method 0x1c8) too. Off:
+/// with it on, the first world run showed the screen broken into squares (the state read from
+/// their blocks is not yet right for all of them).
+fn native_graphics() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("VICTORY_NATIVE_GRAPHICS").is_some_and(|v| v == "1"))
+}
+
 /// Device methods 0x1c8 and 0x218 (`SLOT`). The title calls both
 /// (title+0x2477578 and title+0x24800d5) as `(this, description, interface
 /// id, out)`, asks for `ID3D12PipelineState`, and on success keeps the
@@ -368,6 +387,111 @@ extern "system" fn unknown_pipeline<const SLOT: usize>(
     if !out.is_null() {
         // SAFETY: the title's out pointer (a local of its own).
         unsafe { *out = std::ptr::null() };
+    }
+    // 0x218 makes a compute pipeline from precompiled native code: the description's word 5 is
+    // the code's address, word 6 its size (word 0 the root signature, words 1-4 and 7-8 register
+    // and resource blocks). The code is the native program of a container in the title's shader
+    // pack, found by the identity hash its first instructions carry; that container is made into
+    // a pipeline as `CreateComputePipelineState` would.
+    #[cfg(windows)]
+    if SLOT == 0x218 && native_pipelines() {
+        let mut words = [0u8; 56];
+        if crate::host::read_into(desc, &mut words) {
+            let word = |i: usize| u64::from_le_bytes(words[i * 8..i * 8 + 8].try_into().unwrap());
+            let (at, size) = (word(5), word(6));
+            let mut code = vec![0u8; size.clamp(0, 64) as usize];
+            if size >= 24
+                && crate::host::read_into(at as *const u8, &mut code)
+                && let Some((container, _)) = crate::pipeline::native_container(&code)
+            {
+                let made = crate::pipeline::create_compute_from(&container, _iid, out);
+                if made >= 0 {
+                    NATIVE_MADE.fetch_add(1, Ordering::Relaxed);
+                    return made;
+                }
+            }
+        }
+        NATIVE_MISSED.fetch_add(1, Ordering::Relaxed);
+        if NATIVE_MISSED.load(Ordering::Relaxed).is_power_of_two() {
+            tracing::warn!(made = NATIVE_MADE.load(Ordering::Relaxed), missed = NATIVE_MISSED.load(Ordering::Relaxed), "precompiled compute pipelines: one not found in the shader pack");
+        }
+    }
+    // 0x1c8 makes a graphics pipeline the same way: one 0x160-byte description, word 1-2 a
+    // GFX10 register block (blend), words 3-4 the input layout and target formats, and from word
+    // 5 on (code, size) pairs of its stages, each followed by a (resource block, size) pair.
+    #[cfg(windows)]
+    if SLOT == 0x1c8 && native_graphics() {
+        let mut head = [0u8; 0x160];
+        if crate::host::read_into(desc, &mut head) {
+            let word = |i: usize| u64::from_le_bytes(head[i * 8..i * 8 + 8].try_into().unwrap());
+            let block = |at: u64, len: u64| {
+                let mut b = vec![0u8; len.min(0x1000) as usize];
+                (at > 0x1_0000 && crate::host::read_into(at as *const u8, &mut b)).then_some(b)
+            };
+            let mut stages = Vec::new();
+            for i in (5..=29).step_by(4) {
+                let (at, size) = (word(i), word(i + 1));
+                if size < 24 || size > 0x10000 {
+                    continue;
+                }
+                if let Some(code) = block(at, 64)
+                    && let Some(found) = crate::pipeline::native_container(&code)
+                {
+                    stages.push(found);
+                }
+            }
+            if !stages.is_empty()
+                && let (Some(regs), Some(layout)) = (block(word(1), word(2)), block(word(3), word(4)))
+                && let Some(state) = crate::pipeline::host::GraphicsState::from_precompiled(&regs, &layout)
+            {
+                let made = crate::pipeline::create_graphics_from(&stages, state, _iid, out);
+                if made >= 0 {
+                    NATIVE_MADE.fetch_add(1, Ordering::Relaxed);
+                    return made;
+                }
+            }
+        }
+        NATIVE_MISSED.fetch_add(1, Ordering::Relaxed);
+        if NATIVE_MISSED.load(Ordering::Relaxed).is_power_of_two() {
+            tracing::warn!(made = NATIVE_MADE.load(Ordering::Relaxed), missed = NATIVE_MISSED.load(Ordering::Relaxed), "precompiled graphics pipelines: one could not be made");
+        }
+    }
+    // `VICTORY_PSO_DUMP=<folder>` (diagnostics): the first 48 descriptions of each slot, 1 KiB
+    // each, and every block a (pointer, size up to 64 KiB) pair of their words names, as files.
+    #[cfg(all(windows, feature = "diagnostics"))]
+    if (calls <= 48 || calls % 64 == 0)
+        && let Some(dir) = std::env::var_os("VICTORY_PSO_DUMP")
+    {
+        let dir = std::path::PathBuf::from(dir);
+        let _ = std::fs::create_dir_all(&dir);
+        let mut head = vec![0u8; 1024];
+        if crate::host::read_into(desc, &mut head) {
+            let _ = std::fs::write(dir.join(format!("{SLOT:x}-{calls:02}-desc.bin")), &head);
+            let words: Vec<u64> = head.as_chunks::<8>().0.iter().map(|c| u64::from_le_bytes(*c)).collect();
+            for i in 0..words.len() - 1 {
+                let (at, len) = (words[i], words[i + 1]);
+                if at > 0x1_0000 && at < 0x8000_0000_0000 && len > 0 && len <= 0x1_0000 {
+                    let mut block = vec![0u8; len as usize];
+                    if crate::host::read_into(at as *const u8, &mut block) {
+                        let _ = std::fs::write(dir.join(format!("{SLOT:x}-{calls:02}-w{i:03}-{at:x}.bin")), &block);
+                    }
+                }
+            }
+            // 512 bytes at every other pointer-like word of the first 0x160 bytes (one entry).
+            for (i, &at) in words.iter().enumerate().take(44) {
+                if at > 0x1_0000 && at < 0x8000_0000_0000 {
+                    let mut block = vec![0u8; 512];
+                    if crate::host::read_into(at as *const u8, &mut block) {
+                        let _ = std::fs::write(dir.join(format!("{SLOT:x}-{calls:02}-p{i:03}-{at:x}.bin")), &block);
+                    }
+                }
+            }
+            // What the first word points at (an object of ours?): 256 bytes.
+            let mut first = vec![0u8; 256];
+            if words[0] > 0x1_0000 && crate::host::read_into(words[0] as *const u8, &mut first) {
+                let _ = std::fs::write(dir.join(format!("{SLOT:x}-{calls:02}-first.bin")), &first);
+            }
+        }
     }
     if calls <= 4 || calls.is_power_of_two() {
         // Sixteen 64-bit words at `at`, read through the kernel: neither

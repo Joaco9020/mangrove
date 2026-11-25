@@ -92,6 +92,124 @@ impl Default for GraphicsState {
 }
 
 impl GraphicsState {
+    /// The state of a precompiled pipeline (device method 0x1c8) from its two blocks, as read
+    /// from 122 descriptions (all of them menus, video and the HUD):
+    /// - `layout` (0xbc+ bytes): +0x10 eight bytes of render target formats, +0x1c the sample
+    ///   mask, +0x24 the depth format (u8), +0x26 the topology type (low 4 bits), +0x28 the
+    ///   sample count and quality, +0x4c the input element count, then per element a u32 name
+    ///   length (with NUL), the name, and the six u32 of `D3D12_INPUT_ELEMENT_DESC` after it.
+    /// - `regs` (0x184 bytes of GFX10 registers): +0xcc CB_TARGET_MASK, +0xd0 eight
+    ///   CB_BLENDn_CONTROL.
+    ///
+    /// shortcut: depth and stencil tests are off and nothing is culled (no register word was
+    /// found to tell them apart); right for the 2D passes these pipelines draw, wrong for any
+    /// that tests depth.
+    pub(crate) fn from_precompiled(regs: &[u8], layout: &[u8]) -> Option<Self> {
+        let u32_at = |b: &[u8], o: usize| b.get(o..o + 4).map(|s| u32::from_le_bytes(s.try_into().unwrap()));
+        let mut g = GraphicsState::default();
+        let formats = layout.get(0x10..0x18)?;
+        let count = formats.iter().take_while(|&&f| f != 0).count();
+        g.targets.NumRenderTargets = count as u32;
+        for (i, &f) in formats[..count].iter().enumerate() {
+            g.targets.RTFormats[i] = DXGI_FORMAT(crate::resource::target_format(crate::resource::pc_format(u32::from(f))) as i32);
+        }
+        g.sample_mask = u32_at(layout, 0x1c)?;
+        g.depth_format = DXGI_FORMAT(crate::resource::pc_format(u32::from(layout[0x24])) as i32);
+        g.topology = match layout[0x26] & 0xf {
+            t @ 1..=4 => D3D12_PRIMITIVE_TOPOLOGY_TYPE(i32::from(t)),
+            _ => D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+        };
+        g.samples = DXGI_SAMPLE_DESC { Count: u32_at(layout, 0x28)?.max(1), Quality: u32_at(layout, 0x2c)? };
+        g.depth.DepthEnable = false.into();
+        g.depth.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+        g.rasterizer.CullMode = D3D12_CULL_MODE_NONE;
+        // GFX10 blend factor and function numbers to D3D12's.
+        let factor = |f: u32| match f {
+            0 => D3D12_BLEND_ZERO,
+            1 => D3D12_BLEND_ONE,
+            2 => D3D12_BLEND_SRC_COLOR,
+            3 => D3D12_BLEND_INV_SRC_COLOR,
+            4 => D3D12_BLEND_SRC_ALPHA,
+            5 => D3D12_BLEND_INV_SRC_ALPHA,
+            6 => D3D12_BLEND_DEST_ALPHA,
+            7 => D3D12_BLEND_INV_DEST_ALPHA,
+            8 => D3D12_BLEND_DEST_COLOR,
+            9 => D3D12_BLEND_INV_DEST_COLOR,
+            10 => D3D12_BLEND_SRC_ALPHA_SAT,
+            13 => D3D12_BLEND_BLEND_FACTOR,
+            14 => D3D12_BLEND_INV_BLEND_FACTOR,
+            15 => D3D12_BLEND_SRC1_COLOR,
+            16 => D3D12_BLEND_INV_SRC1_COLOR,
+            17 => D3D12_BLEND_SRC1_ALPHA,
+            18 => D3D12_BLEND_INV_SRC1_ALPHA,
+            19 => D3D12_BLEND_ALPHA_FACTOR,
+            20 => D3D12_BLEND_INV_ALPHA_FACTOR,
+            _ => D3D12_BLEND_ONE,
+        };
+        let op = |f: u32| match f {
+            1 => D3D12_BLEND_OP_SUBTRACT,
+            2 => D3D12_BLEND_OP_MIN,
+            3 => D3D12_BLEND_OP_MAX,
+            4 => D3D12_BLEND_OP_REV_SUBTRACT,
+            _ => D3D12_BLEND_OP_ADD,
+        };
+        let mask = u32_at(regs, 0xcc)?;
+        g.blend.IndependentBlendEnable = true.into();
+        for (i, t) in g.blend.RenderTarget.iter_mut().enumerate() {
+            let c = u32_at(regs, 0xd0 + i * 4)?;
+            let separate = c & (1 << 29) != 0;
+            t.BlendEnable = (c & (1 << 30) != 0).into();
+            t.SrcBlend = factor(c & 0x1f);
+            t.BlendOp = op((c >> 5) & 7);
+            t.DestBlend = factor((c >> 8) & 0x1f);
+            (t.SrcBlendAlpha, t.BlendOpAlpha, t.DestBlendAlpha) = if separate {
+                (factor((c >> 16) & 0x1f), op((c >> 21) & 7), factor((c >> 24) & 0x1f))
+            } else {
+                (t.SrcBlend, t.BlendOp, t.DestBlend)
+            };
+            // Alpha factors may not name a colour (D3D12 refuses them there).
+            let alpha = |b: D3D12_BLEND| match b {
+                D3D12_BLEND_SRC_COLOR => D3D12_BLEND_SRC_ALPHA,
+                D3D12_BLEND_INV_SRC_COLOR => D3D12_BLEND_INV_SRC_ALPHA,
+                D3D12_BLEND_DEST_COLOR => D3D12_BLEND_DEST_ALPHA,
+                D3D12_BLEND_INV_DEST_COLOR => D3D12_BLEND_INV_DEST_ALPHA,
+                D3D12_BLEND_SRC1_COLOR => D3D12_BLEND_SRC1_ALPHA,
+                D3D12_BLEND_INV_SRC1_COLOR => D3D12_BLEND_INV_SRC1_ALPHA,
+                D3D12_BLEND_BLEND_FACTOR => D3D12_BLEND_ALPHA_FACTOR,
+                D3D12_BLEND_INV_BLEND_FACTOR => D3D12_BLEND_INV_ALPHA_FACTOR,
+                b => b,
+            };
+            t.SrcBlendAlpha = alpha(t.SrcBlendAlpha);
+            t.DestBlendAlpha = alpha(t.DestBlendAlpha);
+            t.RenderTargetWriteMask = ((mask >> (i * 4)) & 0xf) as u8;
+        }
+        // Input elements: name length, name, then the rest of `D3D12_INPUT_ELEMENT_DESC`.
+        let elements = u32_at(layout, 0x4c)? as usize;
+        let mut at = 0x50;
+        for _ in 0..elements.min(32) {
+            let len = u32_at(layout, at)? as usize;
+            let name = layout.get(at + 4..at + 4 + len)?;
+            let name = CStr::from_bytes_until_nul(name).ok()?.to_owned();
+            let f = at + 4 + len;
+            let field = |k: usize| u32_at(layout, f + k * 4);
+            g.inputs.push(D3D12_INPUT_ELEMENT_DESC {
+                SemanticName: PCSTR::null(),
+                SemanticIndex: field(0)?,
+                Format: DXGI_FORMAT(crate::resource::pc_format(field(1)?) as i32),
+                InputSlot: field(2)?,
+                AlignedByteOffset: field(3)?,
+                InputSlotClass: D3D12_INPUT_CLASSIFICATION(field(4)? as i32),
+                InstanceDataStepRate: field(5)?,
+            });
+            g.names.push(name);
+            at = f + 24;
+        }
+        for (e, name) in g.inputs.iter_mut().zip(&g.names) {
+            e.SemanticName = PCSTR(name.as_ptr().cast());
+        }
+        Some(g)
+    }
+
     /// Takes in one subobject of a stream: its type, then its data at +4
     /// (+8 for those holding pointers).
     ///
@@ -1328,5 +1446,36 @@ mod tests {
 
         assert_eq!(run_draw(0.6, 1.0), 0, "depth 0.5 outside [0.6, 1.0] must be rejected");
         assert_eq!(run_draw(0.4, 0.6), 255, "depth 0.5 inside [0.4, 0.6] must pass");
+    }
+}
+
+#[cfg(test)]
+mod precompiled_tests {
+    use super::*;
+
+    fn hex(s: &str) -> Vec<u8> {
+        (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
+    }
+
+    #[test]
+    fn a_dumped_ui_pipeline_reads_as_its_state() {
+        // The layout block of the title's first precompiled pipeline (VS_TransformUnlit_IM).
+        let layout = hex("07bce7760010000000000000010000001c0000000000000000000000ffffffff000000000001030001000000000000000000000000000000700000000c0000000000000000000000000000000300000009000000504f534954494f4e0000000000060000000000000000000000000000000000000006000000434f4c4f5200000000001c000000000000000c000000000000000000000009000000544558434f4f524400000000001000000000000000100000000000000000000000");
+        let mut regs = vec![0u8; 0x184];
+        regs[0xcc..0xd0].copy_from_slice(&0x0000_000fu32.to_le_bytes());
+        regs[0xd0..0xd4].copy_from_slice(&0xe504_0504u32.to_le_bytes());
+        let g = GraphicsState::from_precompiled(&regs, &layout).unwrap();
+        assert_eq!(g.targets.NumRenderTargets, 1);
+        assert_eq!(g.topology, D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+        assert_eq!(g.samples.Count, 1);
+        let names: Vec<&str> = g.names.iter().map(|n| n.to_str().unwrap()).collect();
+        assert_eq!(names, ["POSITION", "COLOR", "TEXCOORD"]);
+        let fields: Vec<(i32, u32)> = g.inputs.iter().map(|e| (e.Format.0, e.AlignedByteOffset)).collect();
+        assert_eq!(fields, [(6, 0), (28, 12), (16, 16)]);
+        let t = &g.blend.RenderTarget[0];
+        assert!(t.BlendEnable.as_bool());
+        assert_eq!((t.SrcBlend, t.DestBlend, t.BlendOp), (D3D12_BLEND_SRC_ALPHA, D3D12_BLEND_INV_SRC_ALPHA, D3D12_BLEND_OP_ADD));
+        assert_eq!(t.RenderTargetWriteMask, 0xf);
+        assert_eq!(g.blend.RenderTarget[1].RenderTargetWriteMask, 0);
     }
 }
