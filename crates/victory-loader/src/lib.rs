@@ -25,6 +25,8 @@
 mod console_insn;
 mod crash;
 pub mod frame_rate;
+#[cfg(windows)]
+mod pool_asserts;
 pub mod prepare;
 pub(crate) mod publish;
 pub mod resolve;
