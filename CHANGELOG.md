@@ -16,6 +16,11 @@ What mangrove adds on top of [hyphennn's victory-fork](https://github.com/fxcele
 - Result: the prologue reaches gameplay (HUD help prompt, pad input moves
   Lucia); three overnight runs of 60-90 minutes, up to frame 11,298, no crash.
 
+### Picture
+- Ambient light (`VICTORY_AMBIENT`, 0.6 by default): a constant stands in for the
+  title's ray-traced indirect light right after its probe resolve, so shadowed
+  areas are not pitch black. Ported from Belobug/VIctory-Belobug-AMD.
+
 ### Faster, more on screen
 - `pc\settings.bat`: `VICTORY_LATE_WAIT=2`, `VICTORY_TEXTURE_ROOM_PERCENT=94`,
   fork-default card buffers. Measured: 1.6 -> 2.3 fps, copy-back 521 -> 218 ms

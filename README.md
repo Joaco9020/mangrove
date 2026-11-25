@@ -54,6 +54,7 @@ Screenshots and video stay out of this repository (no game content, per
 | `pc\play.bat` | one-click launcher with the 8 GB NVIDIA settings below |
 | `pc\easy-view.ps1` | replaces the raw log with a plain-English window: speed, objects drawn, objects skipped (not ready yet), shaders ready, files loaded, and red **PROBLEM** lines for GPU resets or out-of-memory |
 | `victory warm` | pre-translates every shader and pre-builds the compute pipelines before you play (ported from leonida-victory), so the first run is not mostly black |
+| `VICTORY_AMBIENT=<level>` | a constant indirect light in place of the title's ray-traced probes (which do not run), so what the sun does not reach is not pitch black; 0.6 by default, `off` for the title's own output (from Belobug/VIctory-Belobug-AMD) |
 | `VICTORY_POOL_NO_ASSERT=1` | gets past the crash about 6-8 minutes into the opening cinematic (below); on in `play.bat` |
 | `pc\second-monitor.ps1` | puts the game window on your second monitor at 1280×720 without stealing focus |
 
@@ -187,6 +188,7 @@ the emulation work belongs to these people:**
 | **hyphennn** ([fxceless](https://github.com/fxceless)) and the [victory-fork contributors](https://github.com/fxceless/victory-fork/graphs/contributors) | [victory-fork](https://github.com/fxceless/victory-fork): the rendering and speed fixes mangrove is built on |
 | **[Zettrox](https://github.com/Zettrox)** | [ztrx](https://github.com/Zettrox/ztrx): showed this code reaching the world on an 8 GB NVIDIA card (RTX 3050) |
 | **[mauri9911](https://github.com/mauri9911)** and myokex | [leonida-victory](https://github.com/mauri9911/leonida-victory): testing help, NVIDIA shortcuts and the `victory warm` command ported here |
+| **[Belobug](https://github.com/Belobug)** | [VIctory-Belobug-AMD](https://github.com/Belobug/VIctory-Belobug-AMD): the ambient-light pass (`ambient.rs`) ported here |
 | **[WalliceCariasPerussio](https://github.com/WalliceCariasPerussio)** | the pool-assert workaround (VIctory #698) that `VICTORY_POOL_NO_ASSERT` re-implements |
 | The VIctory #698 reporters (Sil3ntGam3r, LAKSHYA-cmd-tech, likecrank-dotcom, VibeClauding, VoidDeficit, Sunkiller-qc and others) | pinned the 8-minute stop to the `INSTANCE_LIST` pool |
 | The people who reported victory-fork issues #269 and #310 | found the texture-guard and shader-optimiser switches used in `play.bat` |
