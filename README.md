@@ -14,6 +14,8 @@ tuned for 8 GB NVIDIA cards and an easy-to-read status window.
 
 ## Status (2026-11-25)
 
+**GTA VI on an RTX 3070 8 GB:** boots through the intro and title screen at 30 fps, then the prologue's opening cinematic renders in 3D in the world, and keeps playing past the 8-minute stop (21+ minutes, frame 3,500+).
+
 Tested on Windows 11 with an **NVIDIA GeForce RTX 3070 (8 GB)**, Ryzen 5 2600, 32 GB RAM:
 
 | | |
