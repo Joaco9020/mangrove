@@ -1601,6 +1601,30 @@ mod tests {
         (hub, host)
     }
 
+    #[test]
+    fn keyboard_pad_maps_tab_space_shift_and_view() {
+        let pad = super::fallback(&[key(0x09), key(0x20), key(0xA0), key(b'V')]);
+        assert_eq!(pad.left_trigger, 1.0, "Tab is the left trigger");
+        assert_eq!(pad.right_trigger, 0.0);
+        assert_eq!(pad.buttons & super::X, super::X, "Space is X");
+        assert_eq!(pad.buttons & super::A, super::A, "Left Shift is A");
+        assert_eq!(pad.buttons & super::VIEW, super::VIEW, "V is View");
+        let none = super::fallback(&[]);
+        assert_eq!((none.left_trigger, none.right_trigger, none.buttons), (0.0, 0.0, 0));
+    }
+
+    #[test]
+    fn mouse_turns_the_right_stick_and_buttons_are_triggers() {
+        *super::MOUSE_LOOK.lock().unwrap() = (0.5, -2.0);
+        *super::MOUSE_TRIGGERS.lock().unwrap() = (1.0, 1.0);
+        let pad = super::fallback(&[key(b'L')]);
+        *super::MOUSE_LOOK.lock().unwrap() = (0.0, 0.0);
+        *super::MOUSE_TRIGGERS.lock().unwrap() = (0.0, 0.0);
+        assert_eq!(pad.right_x, 1.0, "key and mouse add up, clamped");
+        assert_eq!(pad.right_y, -1.0, "clamped");
+        assert_eq!((pad.left_trigger, pad.right_trigger), (1.0, 1.0), "right mouse = LT, left mouse = RT");
+    }
+
     fn key(virtual_key: u8) -> KeyState {
         KeyState {
             scan_code: u32::from(virtual_key) + 0x100,
