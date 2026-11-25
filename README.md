@@ -160,7 +160,7 @@ the emulation work belongs to these people:**
 | The people who reported victory-fork issues #269 and #310 | found the texture-guard and shader-optimiser switches used in `play.bat` |
 | **[4lwayz](https://github.com/4lwayz)** | [PortWatch VI](https://portwatch-vi.xyz), which tracks all of these efforts |
 
-The fork's own README is kept in
+What mangrove changed, with commit ids: [CHANGELOG.md](CHANGELOG.md). The fork's own README is kept in
 [`docs/victory-fork-README.md`](docs/victory-fork-README.md).
 
 Made with AI assistance ([Claude Code](https://claude.com/claude-code)).
