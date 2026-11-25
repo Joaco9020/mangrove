@@ -74,6 +74,25 @@ so **no list derived from the game is shipped**. It runs only on the build it
 was checked on, and it is a workaround: a caller that does not expect null
 could still fault later.
 
+### How the stop was found
+
+- Every worker thread stopped at once on `0x80000003` at the same address, with
+  `rax = 0x17690001fffe`. Disassembling the title around that address shows a
+  lock-free free-list pop: the head's low dword is masked with `0x1ffff`, swapped
+  in with `lock cmpxchg`, and compared against `0x1fffe` first. `0x1fffe` is
+  the list's end marker, so the pool was empty and the allocator fell into its
+  `int3`.
+- The instruction after the `int3` is `xor reg, reg` on the way to the
+  function's own null return, so a NOP there turns the stop into a failed
+  allocation.
+- VIctory #698 tied the same address to the title's own crash report
+  (`INSTANCE_LIST: 45000/45000`, SRL `Prestream`) and found the stop at a fixed
+  point in the cinematic on AMD, NVIDIA, Windows and Linux alike.
+- The title has 5,776 inlined copies of the allocator; scanning for the 17-bit
+  pop next to `lock cmpxchg` and following nearby jumps onto `int3` + `xor r, r`
+  finds 2,622 pool-empty sites (a superset of the 2,205 a full disassembly
+  reports).
+
 ## Troubleshooting
 
 | You see | What it is | What to do |
