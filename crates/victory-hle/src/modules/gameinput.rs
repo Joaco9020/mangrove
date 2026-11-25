@@ -62,10 +62,11 @@ const HISTORY: usize = 32;
 const POLL: Duration = Duration::from_millis(8);
 
 /// The keyboard's stand-in gamepad (virtual key, button); README lists it.
-/// Sticks: W/A/S/D left, I/J/K/L right; triggers Z and C.
-const FALLBACK_BUTTONS: [(u8, u32); 14] = [
+/// Sticks: W/A/S/D left, I/J/K/L right (or the mouse); triggers Z / Tab / right mouse
+/// button (LT) and C / left mouse button (RT); View on V; Space = X, Left Shift = A.
+const FALLBACK_BUTTONS: [(u8, u32); 16] = [
     (0x1B, MENU), // Esc
-    (0x09, VIEW), // Tab
+    (b'V', VIEW), // Tab is the left trigger (L2)
     (0x0D, A),    // Enter
     (0x08, B),    // Backspace
     (b'X', X),
@@ -78,6 +79,8 @@ const FALLBACK_BUTTONS: [(u8, u32); 14] = [
     (b'E', RIGHT_SHOULDER),
     (b'F', LEFT_STICK),
     (b'H', RIGHT_STICK),
+    (0x20, X), // Space: jump
+    (0xA0, A), // Left Shift: sprint
 ];
 
 /// A gamepad reading: triggers 0 to 1, sticks -1 to 1 (up positive).
@@ -115,7 +118,15 @@ trait Source: Send {
     fn rumble(&mut self, slot: usize, low: u16, high: u16);
 }
 
+/// The mouse as the stand-in pad's right stick (`x`, `y` in -1..=1), set by the
+/// host while the title's window has focus.
+static MOUSE_LOOK: std::sync::Mutex<(f32, f32)> = std::sync::Mutex::new((0.0, 0.0));
+/// Mouse buttons as triggers (left trigger: right button, right trigger: left button).
+static MOUSE_TRIGGERS: std::sync::Mutex<(f32, f32)> = std::sync::Mutex::new((0.0, 0.0));
+
 fn fallback(keys: &[KeyState]) -> PadState {
+    let mouse = *MOUSE_LOOK.lock().unwrap_or_else(|e| e.into_inner());
+    let (rmb, lmb) = *MOUSE_TRIGGERS.lock().unwrap_or_else(|e| e.into_inner());
     let on = |vk: u8| {
         if keys.iter().any(|k| k.virtual_key == vk) {
             1.0
@@ -128,12 +139,12 @@ fn fallback(keys: &[KeyState]) -> PadState {
             .iter()
             .filter(|(vk, _)| on(*vk) != 0.0)
             .fold(0, |all, (_, bit)| all | bit),
-        left_trigger: on(b'Z'),
-        right_trigger: on(b'C'),
+        left_trigger: f32::max(on(b'Z'), on(0x09)).max(rmb),
+        right_trigger: f32::max(on(b'C'), lmb),
         left_x: on(b'D') - on(b'A'),
         left_y: on(b'W') - on(b'S'),
-        right_x: on(b'L') - on(b'J'),
-        right_y: on(b'I') - on(b'K'),
+        right_x: (on(b'L') - on(b'J') + mouse.0).clamp(-1.0, 1.0),
+        right_y: (on(b'I') - on(b'K') + mouse.1).clamp(-1.0, 1.0),
     }
 }
 
@@ -1084,8 +1095,9 @@ mod host {
         XINPUT_GAMEPAD_X, XINPUT_GAMEPAD_Y, XINPUT_STATE, XINPUT_VIBRATION, XInputGetState,
         XInputSetState,
     };
+    use windows_sys::Win32::Foundation::{POINT, RECT};
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetForegroundWindow, GetWindowThreadProcessId,
+        GetCursorPos, GetForegroundWindow, GetWindowRect, GetWindowThreadProcessId, SetCursorPos,
     };
 
     use super::*;
@@ -1166,6 +1178,7 @@ mod host {
             let mut down = scripted();
             #[cfg(not(feature = "diagnostics"))]
             let mut down = Vec::new();
+            mouse_look(focused());
             if focused() {
                 // Left/right modifier keys only, as devices report them; no
                 // mouse buttons (below 0x08).
@@ -1242,6 +1255,45 @@ mod host {
             .filter(|&&(at, _, hold)| (at..at + hold).contains(&now))
             .map(|&(_, vk, _)| vk)
             .collect()
+    }
+
+    /// Mouse-look: while the title's window has focus, mouse movement turns the
+    /// stand-in pad's right stick and the cursor is held at the window's centre
+    /// (as games do; Alt+Tab gives it back). The stick eases back to rest when
+    /// the mouse stops. `VICTORY_MOUSE_LOOK=0` turns it off.
+    fn mouse_look(focused: bool) {
+        static OFF: LazyLock<bool> = LazyLock::new(|| std::env::var_os("VICTORY_MOUSE_LOOK").is_some_and(|v| v == "0"));
+        let mut look = MOUSE_LOOK.lock().unwrap_or_else(|e| e.into_inner());
+        let mut triggers = MOUSE_TRIGGERS.lock().unwrap_or_else(|e| e.into_inner());
+        if !focused {
+            *look = (0.0, 0.0);
+            *triggers = (0.0, 0.0);
+            return;
+        }
+        // SAFETY: plain queries (VK_RBUTTON, VK_LBUTTON).
+        let held = |vk: i32| if unsafe { GetAsyncKeyState(vk) } < 0 { 1.0 } else { 0.0 };
+        *triggers = (held(0x02), held(0x01));
+        if *OFF {
+            *look = (0.0, 0.0);
+            return;
+        }
+        let mut rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+        let mut at = POINT { x: 0, y: 0 };
+        // SAFETY: plain queries on the foreground window and the cursor.
+        if unsafe { GetWindowRect(GetForegroundWindow(), &mut rect) } == 0 || unsafe { GetCursorPos(&mut at) } == 0 {
+            return;
+        }
+        let (cx, cy) = ((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2);
+        let (dx, dy) = ((at.x - cx) as f32, (at.y - cy) as f32);
+        // SAFETY: moves the cursor only.
+        unsafe { SetCursorPos(cx, cy) };
+        // Polled every 8 ms: a steady 500 px/s gives about two thirds of full deflection.
+        const GAIN: f32 = 1.0 / 40.0;
+        const EASE: f32 = 0.85;
+        *look = (
+            (look.0 * EASE + dx * GAIN).clamp(-1.0, 1.0),
+            (look.1 * EASE - dy * GAIN).clamp(-1.0, 1.0),
+        );
     }
 
     /// The foreground window is one of ours (the title's or our fallback).

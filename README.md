@@ -98,9 +98,19 @@ eleaseictory.exe warm <game folder>\shaders.rpf <game folder>\game_scarlett_mas
    fills in as pipelines are built and saved. The **Skipped** number in the easy
    view drops run after run.
 
-Controller: XInput pads. With no pad, the keyboard acts as one while the game
-window has focus (Enter = A, Backspace = B, Esc = Menu, arrows = D-pad, WASD =
-left stick).
+Controller: XInput pads (a DualShock/DualSense through DS4Windows works). With
+no pad, the keyboard and mouse act as one while the game window has focus:
+
+| Pad | Keyboard / mouse |
+|---|---|
+| Left stick | W A S D |
+| Right stick (camera) | mouse (the cursor stays in the window; Alt+Tab frees it; `VICTORY_MOUSE_LOOK=0` turns it off), or I J K L |
+| A / B / X / Y | Enter or Left Shift / Backspace / X or Space / Y |
+| LT / RT | right mouse button, Tab or Z / left mouse button or C |
+| LB / RB | Q / E |
+| L3 / R3 | F / H |
+| D-pad | arrow keys |
+| Menu / View | Esc / V |
 
 ## Credits
 
