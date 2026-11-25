@@ -3,7 +3,7 @@ param([string]$Log)
 $Host.UI.RawUI.WindowTitle = 'mangrove - what is happening (easy view)'
 while (-not (Test-Path $Log)) { Start-Sleep 1 }
 $fs = [IO.File]::Open($Log, 'Open', 'Read', 'ReadWrite'); $rd = New-Object IO.StreamReader($fs)
-$shaders = 0; $pipes = 0; $loads = 0; $fps = '-'; $draws = '-'; $skipped = '-'; $last = Get-Date; $start = Get-Date
+$shaders = 0; $pipes = 0; $loads = 0; $frame = '-'; $waiting = '-'; $fps = '-'; $draws = '-'; $skipped = '-'; $last = Get-Date; $start = Get-Date
 function Say($color, $text) { Write-Host ("[{0:hh\:mm\:ss}] " -f ((Get-Date) - $start)) -NoNewline -ForegroundColor DarkGray; Write-Host $text -ForegroundColor $color }
 Say Cyan 'Waiting for the game to start...'
 while ($true) {
@@ -13,7 +13,7 @@ while ($true) {
             $last = Get-Date
             # the user wants the game on the second monitor: re-place it during the first 2 minutes (its window can appear late)
             if (((Get-Date) - $start).TotalSeconds -lt 120) { & "$PSScriptRoot\second-monitor.ps1" *> $null }
-            Say White ("Speed: {0} fps | Objects drawn per frame: {1} | Skipped (not ready yet): {2} | Shaders ready: {3} | Graphics programs built: {4} | Files loaded: {5}" -f $fps, $draws, $skipped, $shaders, $pipes, $loads)
+            Say White ("Frame {6} | Speed: {0} fps | Objects drawn: {1} | Skipped: {2} | Textures waiting for card room: {7} | Shaders ready: {3} | Graphics programs built: {4} | Files loaded: {5}" -f $fps, $draws, $skipped, $shaders, $pipes, $loads, $frame, $waiting)
             if (-not (Get-Process victory -ErrorAction SilentlyContinue)) { Say Yellow 'The game has closed.'; break }
         }
         Start-Sleep -Milliseconds 300; continue
@@ -22,6 +22,8 @@ while ($true) {
     if ($l -match '([\d.]+) fps') { $fps = $Matches[1] }
     if ($l -match '(\d+) draws/frame') { $draws = $Matches[1] }
     if ($l -match 'dropped (\d+)') { $skipped = $Matches[1] }
+    if ($l -match 'frame=(\d+)') { $frame = $Matches[1] }
+    if ($l -match '(\d+) waiting,') { $waiting = $Matches[1] }
     if ($l -match 'shader translated') { $shaders++ }
     if ($l -match 'first bind pipeline|pipeline made|host pipeline') { $pipes++ }
     if ($l -match 'dstorage') { $loads++ }
