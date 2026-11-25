@@ -30,17 +30,8 @@ Tested on Windows 11 with an **NVIDIA GeForce RTX 3070 (8 GB)**, Ryzen 5 2600, 3
 | Frame rate | 🟡 30 fps in menus; low single digits in 3D scenes |
 | Known problems | ❌ anything in shadow is black (the game's ray-traced lighting does not run yet); subtitles flicker; the first run is mostly black while shaders and pipelines are built (they are cached after that, so each run shows more) |
 
-![Opening cinematic in 3D on an RTX 3070 8 GB](docs/screenshots/opening-cinematic-rtx3070.jpg)
-*Opening cinematic in 3D on an RTX 3070 8 GB (warm cache).*
-
-![Gameplay: HUD help prompt in the prison yard](docs/screenshots/gameplay-prison-hud-rtx3070.jpg)
-*Gameplay: the HUD help prompt after the cinematic.*
-
-![Before and after holding W for 10 s](docs/screenshots/gameplay-w-before-after.jpg)
-*Top: before; bottom: after holding W for 10 seconds (1-2 fps).*
-
-![Past the 8-minute stop: frame 3,000](docs/screenshots/past-8-minute-stop-frame3000.jpg)
-*Frame 3,000, past the point where the game used to stop itself (`VICTORY_POOL_NO_ASSERT=1`).*
+Screenshots and video stay out of this repository (no game content, per
+[docs/asset-policy.md](docs/asset-policy.md)); they are posted separately.
 
 ## What mangrove adds
 
