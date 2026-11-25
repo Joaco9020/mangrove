@@ -67,6 +67,17 @@ enum Command {
         #[arg(long)]
         disasm: bool,
     },
+    /// Translate the shaders of a title's archives into the cache and make
+    /// their compute pipelines, so that a run finds them there.
+    Warm {
+        paths: Vec<PathBuf>,
+        /// Worker threads (default: every logical core).
+        #[arg(long)]
+        jobs: Option<usize>,
+        /// Only translate: no host pipelines.
+        #[arg(long)]
+        no_pipelines: bool,
+    },
     /// Run every shader found (containers, SGD5 files) through the
     /// translator and report what it cannot handle yet.
     Translate {
@@ -146,6 +157,7 @@ fn main() -> Result<()> {
             verbose,
             disasm,
         } => shader::run(paths, verbose || disasm, disasm),
+        Command::Warm { paths, jobs, no_pipelines } => translate::warm(paths, jobs, !no_pipelines),
         Command::Translate {
             paths,
             validate,

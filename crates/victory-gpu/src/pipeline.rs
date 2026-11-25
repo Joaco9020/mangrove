@@ -717,6 +717,24 @@ pub fn use_pipeline_cache(dir: std::path::PathBuf) {
 }
 
 /// Saves the pipeline cache now if anything was added (at the end of a run).
+/// Translates `container` (a title shader of `stage`) into the shader cache and, for a compute
+/// shader with `compute`, makes its host pipeline into the pipeline library: (translated, made).
+/// Ported from leonida-victory (`victory warm`).
+#[cfg(windows)]
+pub fn warm(stage: &'static str, container: &[u8], compute: bool) -> (bool, Option<bool>) {
+    let full = blake3::hash(container);
+    // Not through the table, which lets nothing go.
+    let shader = Arc::new(Shader {
+        stage,
+        hash: full.to_hex()[..16].to_owned(),
+        container: container.to_vec(),
+        translated: OnceLock::new(),
+    });
+    let translated = shader.translated().is_some();
+    let made = (translated && compute).then(|| make::warm(vec![shader])).flatten();
+    (translated, made)
+}
+
 #[cfg(windows)]
 pub fn save_pipeline_cache() {
     library::save(true);

@@ -345,6 +345,11 @@ fn drained() {
     super::library::save(false);
 }
 
+/// A compute pipeline made ahead of a run (`victory warm`), into the library.
+pub(crate) fn warm(shaders: Vec<Arc<Shader>>) -> Option<bool> {
+    Some(HostPipeline::new(&shaders, None).is_some())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

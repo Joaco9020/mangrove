@@ -49,6 +49,10 @@ pub fn use_shader_cache(dir: std::path::PathBuf) {
     let _ = dir;
 }
 
+/// For `victory warm` (ported from leonida-victory).
+#[cfg(windows)]
+pub use victory_gpu::pipeline::{save_pipeline_cache, warm};
+
 pub(crate) fn module() -> HleModule {
     HleModule {
         name: "d3d12x",
