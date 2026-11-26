@@ -1191,8 +1191,7 @@ fn log_first_presents(frame: u64, planes: &[Plane]) {
         return;
     }
     *last = now;
-    // No FidelityFX upscaler in this tree: no upscales to count.
-    let total = 0u64;
+    let total = crate::ffx::UPSCALES.load(Ordering::Relaxed);
     let upscales = total - UPSCALES.swap(total, Ordering::Relaxed);
     let mut shown = Vec::new();
     for (p, plane) in planes.iter().enumerate() {

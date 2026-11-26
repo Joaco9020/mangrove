@@ -8077,6 +8077,11 @@ struct Presenter {
     ahead: Vec<(HostList, u64)>,
     hwnd: HWND,
     meter: Meter,
+    /// Presenting through AMD's frame generation swap chain
+    /// (`VICTORY_FRAMEGEN=1`, [`crate::ffx`]).
+    framegen: bool,
+    /// With it, the interface plane drawn alone ([`framegen_ui`]).
+    ui: Option<ID3D12Resource>,
 }
 
 /// The frame rate, shown in the window's caption every second and logged
@@ -8435,6 +8440,10 @@ impl Host {
             match resized {
                 Ok(()) => {
                     (p.width, p.height, p.format) = (width, height, format);
+                    if p.framegen {
+                        crate::ffx::framegen_display(width, height, format.0);
+                        p.ui = None;
+                    }
                     tracing::info!(
                         width,
                         height,
@@ -8485,6 +8494,7 @@ impl Host {
             let mut seen = (None, None);
             #[cfg(not(feature = "diagnostics"))]
             let _ = frame;
+            let mut ui = None;
             if copied {
                 list.ResourceBarrier(&[
                     transition(texture, state, D3D12_RESOURCE_STATE_COPY_SOURCE),
@@ -8511,7 +8521,19 @@ impl Host {
                     ),
                 ]);
             } else {
-                record_layers(self, list, &back, layers, (width, height, format));
+                // With frame generation a full-window interface plane is
+                // drawn alone, for the SDK to compose over real and
+                // generated frames (else it would be interpolated too).
+                ui = (p.framegen && layers.len() == 2 && layers[1].fractions() == [0.0, 0.0, 1.0, 1.0])
+                    .then(|| framegen_ui(self, &mut p.ui, (width, height, format)))
+                    .flatten();
+                match &ui {
+                    Some(ui) => {
+                        record_layers(self, list, &back, &layers[..1], (width, height, format));
+                        record_layers(self, list, ui, &layers[1..], (width, height, format));
+                    }
+                    None => record_layers(self, list, &back, layers, (width, height, format)),
+                }
             }
             #[cfg(feature = "diagnostics")]
             let (capture, probe) = seen;
@@ -8527,7 +8549,13 @@ impl Host {
             if let Some((buffer, footprint)) = capture {
                 crate::capture::save_read_back(frame, &buffer, &footprint);
             }
+            if p.framegen {
+                crate::ffx::framegen_before_present(ui.as_ref(), !straight_alpha());
+            }
             let _ = p.swap_chain.Present(0, DXGI_PRESENT(0));
+            if p.framegen {
+                crate::ffx::framegen_after_present(p.swap_chain.GetLastPresentCount().ok());
+            }
             p.meter.frame(p.hwnd);
             #[cfg(feature = "diagnostics")]
             return Some(probe.is_some_and(|b| crate::capture::black(&b)));
@@ -8563,9 +8591,20 @@ impl Host {
                 SwapEffect: DXGI_SWAP_EFFECT_FLIP_DISCARD,
                 ..Default::default()
             };
-            let swap_chain = factory
-                .CreateSwapChainForHwnd(&self.queue, hwnd, &desc, None, None)?
-                .cast::<IDXGISwapChain3>()?;
+            let framegen = if crate::ffx::framegen_on() {
+                crate::ffx::framegen_swap_chain(hwnd, &desc, &factory, &self.queue)
+            } else {
+                None
+            };
+            let swap_chain = match &framegen {
+                Some(swap_chain) => {
+                    crate::ffx::framegen_display(width, height, format.0);
+                    swap_chain.clone()
+                }
+                None => factory
+                    .CreateSwapChainForHwnd(&self.queue, hwnd, &desc, None, None)?
+                    .cast::<IDXGISwapChain3>()?,
+            };
             let copy = self.new_list()?;
             copy.close();
             tracing::info!(width, height, format = format.0, "presenting to a window");
@@ -8579,9 +8618,52 @@ impl Host {
                 ahead: Vec::new(),
                 hwnd,
                 meter: Meter::new(),
+                framegen: framegen.is_some(),
+                ui: None,
             })
         }
     }
+}
+
+/// The interface texture frame generation composes ([`crate::ffx`]): the
+/// window's size and format, in the common state, made once per size.
+fn framegen_ui(
+    host: &Host,
+    ui: &mut Option<ID3D12Resource>,
+    (width, height, format): (u32, u32, DXGI_FORMAT),
+) -> Option<ID3D12Resource> {
+    if ui.is_none() {
+        let heap = D3D12_HEAP_PROPERTIES {
+            Type: D3D12_HEAP_TYPE_DEFAULT,
+            ..Default::default()
+        };
+        let desc = D3D12_RESOURCE_DESC {
+            Dimension: D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+            Width: width.into(),
+            Height: height,
+            DepthOrArraySize: 1,
+            MipLevels: 1,
+            Format: format,
+            SampleDesc: DXGI_SAMPLE_DESC {
+                Count: 1,
+                Quality: 0,
+            },
+            Flags: D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET,
+            ..Default::default()
+        };
+        // SAFETY: plain creation of a render target.
+        let made = unsafe {
+            host.device
+                .CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_COMMON, None, ui)
+        };
+        if let Err(e) = made {
+            static REPORTED: std::sync::Once = std::sync::Once::new();
+            REPORTED.call_once(|| {
+                tracing::warn!(error = %e, "no interface texture for frame generation: the interface is composed into the image");
+            });
+        }
+    }
+    ui.clone()
 }
 
 /// A visible top-level window of this process: the one the title made, if
