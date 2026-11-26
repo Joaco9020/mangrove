@@ -3312,6 +3312,9 @@ impl State {
                 if crate::indirect::window_check() && crate::indirect::check_hit(list, (&args.buffer, offset), (kind, stride), &scratch, at) {
                     self.host_pipeline = 0;
                     self.host_roots[1] = 0;
+                } else {
+                    // Clamped ahead like a window's records: the same wait for earlier writes.
+                    crate::indirect::window_barrier(list);
                 }
                 (scratch, at)
             }
