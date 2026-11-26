@@ -131,7 +131,8 @@ enum Command {
         /// Actually start the title. Without it, stop after binding.
         #[arg(long)]
         execute: bool,
-        /// The console model the title sees (device type, memory).
+        /// The console model the title sees (device type, memory);
+        /// `VICTORY_CONSOLE=series-s` also picks the Series S.
         #[arg(long, value_enum, default_value_t = Console::SeriesX)]
         console: Console,
         /// Arguments for the title, after `--` (it reads the whole command
@@ -209,7 +210,14 @@ fn main() -> Result<()> {
             execute,
             console,
             title_args: _,
-        } => run::run(&exe, unimplemented, strict, execute, console),
+        } => {
+            // `VICTORY_CONSOLE=series-s` (for launchers): the Series S profile without the flag.
+            let console = match std::env::var("VICTORY_CONSOLE").as_deref() {
+                Ok("series-s") => Console::SeriesS,
+                _ => console,
+            };
+            run::run(&exe, unimplemented, strict, execute, console)
+        }
         Command::Config => show_config(),
     }
 }

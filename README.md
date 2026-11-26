@@ -1,10 +1,23 @@
 # mangrove
 
 **mangrove** runs the Xbox Series X|S (GDK) build of GTA VI natively on Windows PCs with
-**8 GB NVIDIA graphics cards**, from game files you supply yourself. It is
-[hyphennn's victory-fork](https://github.com/fxceless/victory-fork) (itself a fork
-of [Marvisak's VIctory](https://github.com/Marvisak/VIctory)) with settings
-tuned for 8 GB NVIDIA cards and an easy-to-read status window.
+**8 GB NVIDIA graphics cards**, from game files you supply yourself.
+
+mangrove continues the work of [Marvisak's VIctory](https://github.com/Marvisak/VIctory)
+and [hyphennn's victory-fork](https://github.com/fxceless/victory-fork) with its
+own updates, aimed at getting further on 8 GB NVIDIA cards:
+
+- **Plays past the 8-minute stop** in the opening cinematic (VIctory #698) and
+  reaches the prologue's gameplay: its own loader code disarms the title's
+  pool-empty stops (`pool_asserts.rs`).
+- **Light in the shade**: an ambient pass stands in for the ray-traced
+  indirect light, so shadowed characters are not black.
+- **Faster**: measured settings take the prologue from 1.6 to 2.6 fps.
+- **Pre-warm** of every shader before playing, **keyboard and mouse** play with
+  mouse-look, and an **easy-to-read status window**.
+
+Upstream updates are merged as they land; mangrove's own changes are listed with
+commit ids in [CHANGELOG.md](CHANGELOG.md).
 
 > [!IMPORTANT]
 > **This repository contains no game files, shaders, dumps or assets, and none
@@ -42,7 +55,7 @@ Tested on Windows 11 with an **NVIDIA GeForce RTX 3070 (8 GB)**, Ryzen 5 2600, 3
 | The 8-minute stop (pool full, VIctory #698) | ✅ **passed with `VICTORY_POOL_NO_ASSERT=1`**: three runs of 60-90 min, up to title frame 11,298 (reports stop at 920-1,480), no crash (RTX 3070 8 GB, 2026-11-25) |
 | Opening cinematic | 🟡 **renders in 3D** once the shader cache is warm; flickers in places |
 | Frame rate | 🟡 30 fps in menus; 2.5 fps in the prologue (RTX 3070, Ryzen 5 2600) |
-| Known problems | ❌ anything in shadow is black (the game's ray-traced lighting does not run yet); subtitles flicker; the first run is mostly black while shaders and pipelines are built (they are cached after that, so each run shows more) |
+| Known problems | ❌ the game's ray-traced lighting does not run yet: with `VICTORY_AMBIENT` (on by default) shadowed areas get a constant light instead of black; subtitles flicker; the first run is mostly black while shaders and pipelines are built (they are cached after that, so each run shows more) |
 
 Screenshots and video stay out of this repository (no game content, per
 [docs/asset-policy.md](docs/asset-policy.md)); they are posted separately.
@@ -54,6 +67,7 @@ Screenshots and video stay out of this repository (no game content, per
 | `pc\play.bat` | one-click launcher with the 8 GB NVIDIA settings below |
 | `pc\easy-view.ps1` | replaces the raw log with a plain-English window: speed, objects drawn, objects skipped (not ready yet), shaders ready, files loaded, and red **PROBLEM** lines for GPU resets or out-of-memory |
 | `victory warm` | pre-translates every shader and pre-builds the compute pipelines before you play (ported from leonida-victory), so the first run is not mostly black |
+| `VICTORY_AMBIENT=<level>` | a constant indirect light in place of the title's ray-traced probes (which do not run), so what the sun does not reach is not pitch black; 0.6 by default, `off` for the title's own output (from Belobug/VIctory-Belobug-AMD) |
 | `VICTORY_POOL_NO_ASSERT=1` | gets past the crash about 6-8 minutes into the opening cinematic (below); on in `play.bat` |
 | `pc\second-monitor.ps1` | puts the game window on your second monitor at 1280×720 without stealing focus |
 
@@ -187,6 +201,7 @@ the emulation work belongs to these people:**
 | **hyphennn** ([fxceless](https://github.com/fxceless)) and the [victory-fork contributors](https://github.com/fxceless/victory-fork/graphs/contributors) | [victory-fork](https://github.com/fxceless/victory-fork): the rendering and speed fixes mangrove is built on |
 | **[Zettrox](https://github.com/Zettrox)** | [ztrx](https://github.com/Zettrox/ztrx): showed this code reaching the world on an 8 GB NVIDIA card (RTX 3050) |
 | **[mauri9911](https://github.com/mauri9911)** and myokex | [leonida-victory](https://github.com/mauri9911/leonida-victory): testing help, NVIDIA shortcuts and the `victory warm` command ported here |
+| **[Belobug](https://github.com/Belobug)** | [VIctory-Belobug-AMD](https://github.com/Belobug/VIctory-Belobug-AMD): the ambient-light pass (`ambient.rs`) ported here |
 | **[WalliceCariasPerussio](https://github.com/WalliceCariasPerussio)** | the pool-assert workaround (VIctory #698) that `VICTORY_POOL_NO_ASSERT` re-implements |
 | The VIctory #698 reporters (Sil3ntGam3r, LAKSHYA-cmd-tech, likecrank-dotcom, VibeClauding, VoidDeficit, Sunkiller-qc and others) | pinned the 8-minute stop to the `INSTANCE_LIST` pool |
 | The people who reported victory-fork issues #269 and #310 | found the texture-guard and shader-optimiser switches used in `play.bat` |
