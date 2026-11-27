@@ -19,12 +19,16 @@ What mangrove adds on top of [hyphennn's victory-fork](https://github.com/fxcele
 ### Picture
 - Ambient light (`VICTORY_AMBIENT`, 0.6 by default): a constant stands in for the
   title's ray-traced indirect light right after its probe resolve, so shadowed
-  areas are not pitch black. Ported from Belobug/VIctory-Belobug-AMD.
+  areas are not pitch black. Ported from Belobug/VIctory-Belobug-AMD. (e3c3ae3)
 
 ### Faster, more on screen
 - `pc\settings.bat`: `VICTORY_LATE_WAIT=2`, `VICTORY_TEXTURE_ROOM_PERCENT=94`,
   fork-default card buffers. Measured: 1.6 -> 2.3 fps, copy-back 521 -> 218 ms
   per frame, textures waiting for card room 25,846 -> 16,357. (df4de41)
+- `VICTORY_PIPELINE_WAIT_MS=24` in `pc\settings.bat`: 2.5 fps against 2.3, fewer
+  draws dropped, copy-back 190 ms. (12cc128)
+- Tried and not adopted on this PC: `VICTORY_INDIRECT_GATHER=1` (2.2 fps against
+  2.5) and the Series S profile (720p inside, GPU 46 ms, but every frame black).
 - `victory warm` and `pc\warm.bat`: pre-translate every shader and pre-build the
   compute pipelines before playing (ported from leonida-victory 4ec99d0).
   (5959db7, 4c428d6)
@@ -36,6 +40,8 @@ What mangrove adds on top of [hyphennn's victory-fork](https://github.com/fxcele
 - `VICTORY_KEYS` hold time (`<seconds>:<key>:<hold seconds>`) for scripted
   runs at 1-2 fps. (d46519c)
 - The game window goes to the second monitor (`pc\second-monitor.ps1`).
+- `VICTORY_CONSOLE=series-s` picks the Series S profile for launchers and
+  scripted runs. (2500ce6)
 
 ### Easy view
 - `pc\easy-view.ps1` replaces the raw log with a plain-English status line
@@ -47,4 +53,5 @@ What mangrove adds on top of [hyphennn's victory-fork](https://github.com/fxcele
 - CI: clippy fixes on fork code (afccb65); the depth-bounds GPU test skips on
   software adapters, which CI runners have (fb04e71); the asset policy allows
   `.bat` and keeps screenshots out (6c5efb0).
-- README: status, troubleshooting, how the 8-minute stop was found, credits.
+- README: status, troubleshooting, how the 8-minute stop was found, known limits,
+  credits; leads with mangrove's own updates (424454e).
