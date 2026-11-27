@@ -1,3 +1,23 @@
+# mangrove (branch `on-nvidia`)
+
+**Work in progress, not yet run on this base.** This branch carries mangrove's own
+updates onto the VIctory-NVIDIA base that [hyphennn's victory-fork](https://github.com/fxceless/victory-fork)
+moved to on 27 November 2026. mangrove's `main` branch still has them on the earlier base, where they were
+measured (RTX 3070 8 GB, Ryzen 5 2600, 32 GB RAM, Windows 11; see `CHANGELOG.md` there).
+
+| mangrove's update | Here |
+|---|---|
+| Gets past the stop about 6-8 minutes into the opening cinematic (`0x80000003`, `INSTANCE_LIST` 45000/45000, VIctory #698): `VICTORY_POOL_NO_ASSERT=1` finds the title's pool-empty `int3` sites in the mapped code at load time and turns them into null returns (no game-derived list shipped) | `crates/victory-loader/src/pool_asserts.rs` |
+| Keyboard and mouse as a pad: mouse-look on the right stick, mouse buttons as triggers, Tab = LT, Space = X, Left Shift = A, View on V (with tests) | `crates/victory-hle/src/modules/gameinput.rs` |
+| Host policy allows `bcryptprimitives.dll` (`ProcessPrng`), whose unbound call ended a run | `crates/victory-hle/src/host.rs` |
+| 8 GB card launcher: Series S profile + DLSS Quality, 30 fps cap, pool stop disarmed, below-normal priority; idle-priority preload; a plain-English status window | `pc\play.cmd`, `pc\preload.cmd`, `pc\easy-view.ps1` |
+
+Why the 8 GB launcher: on the RTX 3070 8 GB, VIctory-NVIDIA's default (Series X at 2560x1440) ran out of card
+memory about 80 seconds in (the title's "Failed to allocate upload buffer"), and a first run without the preload
+dropped 1,000-3,000 draws a frame while pipelines were built (about 3 fps). Made with AI assistance (Claude Code).
+
+---
+
 # VIctory fork
 
 **As of 27 November 2026 this repository is based on
