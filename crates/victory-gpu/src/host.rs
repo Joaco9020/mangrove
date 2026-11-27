@@ -2809,6 +2809,7 @@ struct Flight {
 }
 
 /// One thing in the line of what waits for the card, in order.
+#[allow(clippy::large_enum_variant)] // a flight is moved through the line, not boxed: no allocation per submission
 enum Late {
     Run(Flight),
     /// A bottom-of-pipe write of the flight before it: address, what, bytes.
@@ -8633,6 +8634,7 @@ enum Touch {
     /// The copy is given to shaders.
     Write(usize),
     /// Title memory is written.
+    #[allow(dead_code)] // matched in written_spans, not made yet
     Title,
     Nothing,
     /// Another part of the submission begins.
