@@ -305,7 +305,12 @@ fn rest() -> u32 {
 /// The clamp compiled from `source` (ours, or in the benchmark the one it
 /// replaced).
 fn make_from(device: &ID3D12Device, source: &str) -> windows::core::Result<Clamp> {
-    let source = &format!("#define WIDEST {}u\n#define REST {}\n{source}", widest(amd(device)), rest());
+    make_from_rest(device, source, rest())
+}
+
+/// [`make_from`] with [`rest`]'s value given (tests that depend on it name it).
+fn make_from_rest(device: &ID3D12Device, source: &str, rest: u32) -> windows::core::Result<Clamp> {
+    let source = &format!("#define WIDEST {}u\n#define REST {rest}\n{source}", widest(amd(device)));
     let mut code: Option<ID3DBlob> = None;
     let mut errors: Option<ID3DBlob> = None;
     // SAFETY: the source and names live through the call; out pointers ours.
@@ -2668,7 +2673,6 @@ void main(uint3 g : SV_GroupID, uint i : SV_GroupIndex) {
     /// clamps spend all of it is followed, after the reset, by one whose
     /// small record still runs.
     #[test]
-    #[ignore = "fails on the fork tip f299fba on an RTX 3070 and on the CI runner (WARP) alike: budget code or test drifted; see mangrove backlog"]
     fn host_list_budget_starts_empty_at_each_submission() {
         let Some(host) = super::host() else {
             return;
@@ -2700,8 +2704,10 @@ void main(uint3 g : SV_GroupID, uint i : SV_GroupIndex) {
             }
             sig.unwrap()
         };
-        // Three records of 65,535 x 16 groups: about half the budget each.
-        let Some((big, big_ptr)) = host.shared_buffer(3 * u64::from(STRIDE)) else {
+        // Two records of 32,768 x 32 groups (2^26 threads): the whole budget
+        // between them, so the small one after runs empty whether or not a
+        // record that does not fit takes the rest (`VICTORY_INDIRECT_REST`).
+        let Some((big, big_ptr)) = host.shared_buffer(2 * u64::from(STRIDE)) else {
             return;
         };
         let Some((small, small_ptr)) = host.shared_buffer(u64::from(STRIDE)) else {
@@ -2712,8 +2718,8 @@ void main(uint3 g : SV_GroupID, uint i : SV_GroupIndex) {
         };
         // SAFETY: mapped buffers of these sizes; nothing runs yet.
         unsafe {
-            for i in 0..3 {
-                let words = [65535u32, 16, 1];
+            for i in 0..2 {
+                let words = [32768u32, 32, 1];
                 std::ptr::copy_nonoverlapping(
                     words.as_ptr().cast::<u8>(),
                     big_ptr.add(i * STRIDE as usize),
@@ -2727,7 +2733,7 @@ void main(uint3 g : SV_GroupID, uint i : SV_GroupIndex) {
         let hits_gpu = unsafe { hits_buf.GetGPUVirtualAddress() };
         for round in 0..2 {
             // Spends the budget (clamped, not executed), then one group.
-            bound(&list, (&big, 0), None, (KIND_DISPATCH, STRIDE, 3)).unwrap();
+            bound(&list, (&big, 0), None, (KIND_DISPATCH, STRIDE, 2)).unwrap();
             let scratch = bound(&list, (&small, 0), None, (KIND_DISPATCH, STRIDE, 1)).unwrap();
             // SAFETY: an open list; the worker's root signature and
             // pipeline; buffers the test holds until the list has run.
@@ -3152,12 +3158,12 @@ void main(uint3 group : SV_GroupID, uint3 thread : SV_DispatchThreadID) {
     /// Records past the list's budget come out empty, and one read by many
     /// executions is charged for each.
     #[test]
-    #[ignore = "fails on the fork tip f299fba on an RTX 3070 and on the CI runner (WARP) alike: budget code or test drifted; see mangrove backlog"]
     fn warp_batch_charges_every_execution() {
         let Some(mut warp) = WarpHarness::new() else {
             return;
         };
-        let pass = make_from(&warp.device, batch::SOURCE).expect("the batched clamp must compile on WARP");
+        // A record that does not fit takes the rest here (VICTORY_INDIRECT_REST=1), which the counts below assume.
+        let pass = make_from_rest(&warp.device, batch::SOURCE, 1).expect("the batched clamp must compile on WARP");
         const BUDGET: u32 = 1 << 27;
         // 2^26 vertices each, as much as a draw is let run: two fill it.
         for (times, records, filled) in [(1u32, 3u64, 2usize), (2, 1, 1), (1, 1, 1), (3, 1, 0)] {
