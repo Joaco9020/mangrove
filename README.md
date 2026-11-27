@@ -73,6 +73,27 @@ contributors. Thank you.
     group's shared memory starts as the program's first store leaves it.
   - `water_shading:CS_TransmissionVolumetrics_VolumePortalsOnly` takes the
     wave-wide form (it did not translate before).
+  - The water light's tile lists take a slot a lane
+    (`emit/water_tile_slots.rs`, `VICTORY_WATER_TILE_SLOTS=0`: as before).
+    Run as two host waves, the program that lists the water tiles to light
+    let the second wave's tiles overwrite slots of the first; those tiles got
+    no light and the sea had dark patches around boats, piers and lamp posts.
+    The idea is xss3009's "Fix transmission tile allocation on wave32 hosts"
+    (seen in the SmXme fork of VIctory-NVIDIA), written again for this tree.
+    With it the open water has its colour, its light and no dark patches on
+    a GeForce RTX 4070.
+- *The card stays under its memory budget* (`crates/victory-gpu`: `pool.rs`,
+  `resource.rs`, `shadow.rs`). Textures live in 64 MB blocks that only go
+  back to the card when wholly empty, and the gate that admits new textures
+  weighed the card's use minus the free part of those blocks: in long
+  sessions the card went 0.8 to 1.0 GB over its budget and frames went from
+  about 90 ms to about 160 ms with stalls of a second. Now a new block is
+  made only if the card's real use, the block and the render targets still
+  to come stay under the texture line; the sweep keeps some room free inside
+  the blocks; the ray programs' arenas leave the render targets' room too. A
+  texture with no room waits and shows its older view. A line
+  `texture blocks: ...` says how full the blocks are and how many were not
+  made. Nothing is moved or given back (`VICTORY_POOL_GATE=0`: as before).
 - *Ray walkers* (`emit/lower.rs`, `emit/intersect.rs`): a load by address of a
   page that an earlier load of the same turn looked up goes through that
   look's view, and the second half of a 128-byte node through the first
@@ -105,13 +126,15 @@ and the frame rate is higher. The `raytracing` branch is the same code as
 `main`.
 
 Ray tracing is work in progress. Measured on a GeForce RTX 4070 with the
-scene at 1920x1080, in one play session: about 15 frames a second at 3,000 to
-5,000 draws a frame, and about 8 at 5,000 to 12,000. The card's time is the
-limit: at 9,000 draws about 30 ms a frame go to five ray-walking programs and
-about 40 ms to ordinary drawing. The first visit to a place is slower while
-the driver builds that place's ray-tracing programs; they are saved for the
-next start. Known to be wrong still: foam on the water is drawn dark, and
-while travelling fast the ray programs' pages can lag behind.
+scene at 1920x1080, in one play session with the memory gate: about 12.6
+frames a second at 5,000 to 7,000 draws a frame and about 10 at 7,000 to
+12,000, with the card 1.3 GB under its budget throughout. The card's time is
+the limit: about 30 ms a frame go to five ray-walking programs, about 40 ms
+to ordinary drawing, and the water's light costs more again in sea views.
+The first visit to a place is slower while the driver builds that place's
+ray-tracing programs; they are saved for the next start. Known to be wrong
+still: some vehicles' paint comes out a flat lime green, and while
+travelling fast the ray programs' pages can lag behind.
 
 **This fork's earlier work** (up to commit `9a9091d1`) stays in this
 repository's history, with its own credits in the README of that commit.
