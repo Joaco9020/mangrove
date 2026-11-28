@@ -52,6 +52,7 @@ use crate::rays::{self, Bottom, GuidedTop, Hosted, Instance, Pages, Rules, Top};
 
 /// The layer's side of the guide: the same file `victory-gpu` builds.
 #[path = "../../../victory-gpu/src/guide/core.rs"]
+#[allow(dead_code)] // what only victory-gpu calls
 mod guide_core;
 
 fn err(e: windows::core::Error) -> String {
@@ -1675,7 +1676,8 @@ fn the_pass_on_the_card_writes_the_hosts_instances() {
             };
             // (The host's own search: its nearest triangle of the built
             // bottom levels, and how many boxes it asks the program about.)
-            for mode in [0] {
+            {
+                let mode = 0;
                 let (a, b) = (ask(&from_pass, mode), ask(&from_cpu, mode));
                 let hits = a.chunks_exact(8).filter(|o| o[0] == 1).count();
                 let candidates: u64 = a.chunks_exact(8).map(|o| u64::from(o[7])).sum();

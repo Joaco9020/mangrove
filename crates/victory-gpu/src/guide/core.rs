@@ -1110,7 +1110,7 @@ impl Guide {
         }
         let mut sources: Vec<&ID3D12Resource> = Vec::new();
         for (_, res, _) in &copies {
-            if !sources.iter().any(|s| *s == res) {
+            if !sources.contains(&res) {
                 sources.push(res);
             }
         }

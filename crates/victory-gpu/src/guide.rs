@@ -287,20 +287,6 @@ fn reserve_of(level: u8, cap_mb: u64, granted: u64) -> u64 {
     if level >= 3 { (cap_mb << 20).saturating_sub(granted) } else { 0 }
 }
 
-#[cfg(test)]
-mod room_tests {
-    /// The pool's place in front of the arenas: nothing below step 3, the
-    /// cap at first, less each block given room, never below nothing.
-    #[test]
-    fn the_pool_keeps_what_it_has_not_taken_yet() {
-        use super::reserve_of;
-        assert_eq!(reserve_of(2, 128, 0), 0);
-        assert_eq!(reserve_of(3, 128, 0), 128 << 20);
-        assert_eq!(reserve_of(4, 128, 48 << 20), 80 << 20);
-        assert_eq!(reserve_of(3, 128, 200 << 20), 0);
-    }
-}
-
 fn once(error: &str) {
     static SAID: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     if !SAID.swap(true, std::sync::atomic::Ordering::Relaxed) {
@@ -563,4 +549,18 @@ fn report(s: &mut State, frame: u64) {
         );
     }
     s.said = Said { at: std::time::Instant::now(), stats: now, counted: s.said.counted, frames: 0, frame, micros: 0 };
+}
+
+#[cfg(test)]
+mod room_tests {
+    /// The pool's place in front of the arenas: nothing below step 3, the
+    /// cap at first, less each block given room, never below nothing.
+    #[test]
+    fn the_pool_keeps_what_it_has_not_taken_yet() {
+        use super::reserve_of;
+        assert_eq!(reserve_of(2, 128, 0), 0);
+        assert_eq!(reserve_of(3, 128, 0), 128 << 20);
+        assert_eq!(reserve_of(4, 128, 48 << 20), 80 << 20);
+        assert_eq!(reserve_of(3, 128, 200 << 20), 0);
+    }
 }

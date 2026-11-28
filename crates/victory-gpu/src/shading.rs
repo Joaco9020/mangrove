@@ -54,7 +54,7 @@ fn now_ms() -> u64 {
 /// Whether a turn that began `ms` after the start is one in which the rate
 /// is given (the first is).
 const fn turn_gives(ms: u64) -> bool {
-    ms / TURN_MS % 2 == 0
+    (ms / TURN_MS).is_multiple_of(2)
 }
 
 /// Whether the title's rate is given to the host now.

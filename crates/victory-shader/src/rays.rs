@@ -105,7 +105,7 @@ impl Memory for Span<'_> {
         };
         let at = (at / 4) as usize;
         match self.words.get(at..at + words.len()) {
-            Some(w) if address % 4 == 0 => {
+            Some(w) if address.is_multiple_of(4) => {
                 words.copy_from_slice(w);
                 true
             }
@@ -145,7 +145,7 @@ impl Pages {
 
 impl Memory for Pages {
     fn read(&self, address: u64, words: &mut [u32]) -> bool {
-        if address % 4 != 0 {
+        if !address.is_multiple_of(4) {
             return false;
         }
         for (n, w) in words.iter_mut().enumerate() {
@@ -297,7 +297,7 @@ impl Header {
         if turn != 0 {
             // Three quarter-turn-in-four-steps angles, about x, y and z;
             // the matrix is z * y * x and its inverse the transpose.
-            const COS: [f32; 5] = [1.0, 0.923_879_53, 0.707_106_78, 0.382_683_43, 0.0];
+            const COS: [f32; 5] = [1.0, 0.923_879_5, std::f32::consts::FRAC_1_SQRT_2, 0.382_683_43, 0.0];
             let (x, y, z) = ((turn & 3) as usize, (turn >> 2 & 3) as usize, (turn >> 4 & 3) as usize);
             let mx = [[1.0, 0.0, 0.0], [0.0, COS[x], COS[4 - x]], [0.0, -COS[4 - x], COS[x]]];
             let my = [[COS[y], 0.0, -COS[4 - y]], [0.0, 1.0, 0.0], [COS[4 - y], 0.0, COS[y]]];
@@ -1859,7 +1859,7 @@ pub(crate) mod tests {
                 b
             })
             .collect();
-        let narrow = |n: u32| n % 3 != 0;
+        let narrow = |n: u32| !n.is_multiple_of(3);
         let count = |first_leaf: u32| {
             let leaves: Vec<_> = bounds.iter().enumerate().map(|(n, b)| ((first_leaf + n as u32) << 3, *b)).collect();
             tree(&leaves, 1, &narrow)
@@ -1962,7 +1962,7 @@ pub(crate) mod tests {
                 std::array::from_fn(|k| world[k] + if k < 3 { -1.0 } else { 1.0 } * (1e-3 + 1e-4 * world[k].abs()))
             })
             .collect();
-        let narrow = |n: u32| n % 2 == 0;
+        let narrow = |n: u32| n.is_multiple_of(2);
         let count = |first_leaf: u32| {
             let leaves: Vec<_> =
                 bounds.iter().enumerate().map(|(n, b)| ((first_leaf + 2 * n as u32) << 3 | 6, *b)).collect();
@@ -2663,7 +2663,7 @@ pub(crate) mod tests {
         words[15] = 0x2000_0000;
         let h = header(&Span { base, words: &words }, base).unwrap();
         let v = h.to_object([1.0, 2.0, 3.0]);
-        assert!((v[0] + 0.707_106_8).abs() < 1e-6 && (v[1] - 2.121_320_3).abs() < 1e-6 && v[2] == 3.0, "{v:?}");
+        assert!((v[0] + std::f32::consts::FRAC_1_SQRT_2).abs() < 1e-6 && (v[1] - 2.121_320_3).abs() < 1e-6 && v[2] == 3.0, "{v:?}");
     }
 
     /// The console's own instance flags do not reach the host's build.

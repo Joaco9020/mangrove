@@ -485,7 +485,7 @@ mod tests {
         }
         let block: Vec<u8> = (0..(SCAN / DESC) as u64).flat_map(|n| desc(0, 0xff, A + (n % 4000) * 0x1_0000)).collect();
         let arenas: Vec<u64> = (0..16).collect();
-        let place = |a: u64| if arenas.iter().any(|&n| n == (a >> 26) % 64) { Place::Arena } else { Place::Nowhere };
+        let place = |a: u64| if arenas.contains(&((a >> 26) % 64)) { Place::Arena } else { Place::Nowhere };
         c.list(&block, place);
         let start = std::time::Instant::now();
         for _ in 0..20 {
