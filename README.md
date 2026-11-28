@@ -138,8 +138,9 @@ travelling fast the ray programs' pages can lag behind.
 
 **Status, 27 November 2026, night.** By default the frame rate is where the
 session above left it (about 10 to 12.6 frames a second with ray tracing
-on). With the new hardware guide switched on (below) the first session read
-12.3 to 13.2 at 7,600 to 8,300 draws a frame.
+on). The new hardware guide (below, off unless switched on) ran on a card
+for the first time; it still leaves objects out of the rays' scene, so its
+frame rate is not counted as a gain.
 What the day's work found and what is in hand:
 
 - *Slow first minutes after a start: fixed* (`crates/victory-gpu/src/pipeline/sampler_order.rs`,
@@ -163,12 +164,16 @@ What the day's work found and what is in hand:
   level before each walk), the card's hardware finds the candidates, and the title's own triangle
   test still decides. Start with `play --set VICTORY_RAY_GUIDE=3 --set VICTORY_MEMORY_TARGETS_MB=2688`
   (the translator's sources changed, so shaders translate once more).
-  Measured on a GeForce RTX 4070 in its first session: 12.3 to 13.2 frames a second at 7,600 to 8,300
-  draws a frame (75 to 81 ms), against 10.3 (97 ms) at 7,000 to 9,000 draws in the session above. The
-  two sessions are not the same scenes. It is far from done: the check that a decoded structure is
-  sound turned down 543 of the first 705 bottom levels, so only a few are on the hardware yet; every
-  static structure of the title turned out to be stored scaled and moved in a space of its own, which
-  the decoder now brings back.
+  **It is not right yet and its frame rate is not a gain yet.** In its first session on a GeForce RTX
+  4070 it read 12.3 to 13.2 frames a second at 7,600 to 8,300 draws a frame (75 to 81 ms), against
+  10.3 (97 ms) at 7,000 to 9,000 draws in the session above, BUT about 590 of some 2,000 instances a
+  frame were left out of the host's top level, so rays missed those objects: their ray-traced light
+  and shadows were gone on screen, and rays that find less cost less. The number says nothing until
+  the picture is whole. The cause in hand: the check that a decoded structure is sound turned down
+  most bottom levels (3,598 of 4,007 in that session), and an instance of a turned-down one is left
+  out. Every static structure of the title turned out to be stored scaled and moved in a space of
+  its own, which the decoder brings back; the check's tolerance for that is the next thing to fix.
+  Leave the switch off to play.
   One fault found on the way: the guided node test kept a word a thread in the group's shared memory
   and nothing stored it before the first load. The software adapter zeroes that memory and every test
   passed; on the card the first walking dispatch never came back (device hung). The program now
