@@ -5,9 +5,25 @@
 
 mod census;
 mod inspect;
+mod nativepack;
 mod run;
 mod shader;
 mod translate;
+
+/// D3D12 Agility SDK: with these two exports Windows loads `D3D12Core.dll` from `D3D12\` beside the executable
+/// instead of the system's. Windows 10's own D3D12 refuses the root signatures with directly indexed heaps
+/// ("host root signature refused"), so every pipeline failed there. The version must match the copied DLL
+/// (Microsoft.Direct3D.D3D12 1.620.2); without the folder the system runtime is used as before.
+#[cfg(windows)]
+#[unsafe(no_mangle)]
+#[used]
+pub static D3D12SDKVersion: u32 = 620;
+
+/// `const char*` to the folder of `D3D12Core.dll`, relative to the executable.
+#[cfg(windows)]
+#[unsafe(no_mangle)]
+#[used]
+pub static D3D12SDKPath: &[u8; 9] = b".\\D3D12\\\0";
 
 use std::path::PathBuf;
 

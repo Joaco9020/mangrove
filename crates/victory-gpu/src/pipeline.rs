@@ -589,6 +589,50 @@ fn copy(stage: &'static str, code: &Bytecode) -> Option<Arc<Shader>> {
     }))
 }
 
+/// Finds the shader container whose native program begins with the given code (its first 24
+/// bytes carry the program's identity hash): set by the front end, which knows the title's
+/// shader pack. Used for pipelines the title makes from precompiled code (`device.rs`).
+static NATIVE_LOOKUP: std::sync::OnceLock<fn(&[u8]) -> Option<(Vec<u8>, &'static str)>> = std::sync::OnceLock::new();
+
+/// Sets the lookup [`NATIVE_LOOKUP`] describes (once).
+pub fn set_native_lookup(lookup: fn(&[u8]) -> Option<(Vec<u8>, &'static str)>) {
+    let _ = NATIVE_LOOKUP.set(lookup);
+}
+
+/// The container of the program whose native code starts with `code`, and the stage that
+/// program is ("vertex", "pixel", ...), if the lookup is set and knows it.
+pub(crate) fn native_container(code: &[u8]) -> Option<(Vec<u8>, &'static str)> {
+    NATIVE_LOOKUP.get().and_then(|lookup| lookup(code))
+}
+
+/// A compute pipeline from a container found by [`native_container`].
+pub(crate) fn create_compute_from(container: &[u8], iid: *const Iid, out: *mut This) -> HRESULT {
+    let code = Bytecode { code: container.as_ptr(), size: container.len() };
+    hand_out(
+        copy("compute", &code).into_iter().collect(),
+        #[cfg(windows)]
+        None,
+        iid,
+        out,
+    )
+}
+
+/// A graphics pipeline from containers found by [`native_container`] (each with its stage) and
+/// the state `host::GraphicsState::from_precompiled` read.
+#[cfg(windows)]
+pub(crate) fn create_graphics_from(
+    stages: &[(Vec<u8>, &'static str)],
+    graphics: host::GraphicsState,
+    iid: *const Iid,
+    out: *mut This,
+) -> HRESULT {
+    let shaders = stages
+        .iter()
+        .filter_map(|(container, stage)| copy(stage, &Bytecode { code: container.as_ptr(), size: container.len() }))
+        .collect();
+    hand_out(shaders, Some(Box::new(graphics)), iid, out)
+}
+
 fn hand_out(
     shaders: Vec<Arc<Shader>>,
     #[cfg(windows)] graphics: Option<Box<host::GraphicsState>>,

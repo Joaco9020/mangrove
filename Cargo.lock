@@ -636,13 +636,16 @@ dependencies = [
  "blake3",
  "clap",
  "memchr",
+ "tracing",
  "victory-core",
  "victory-game",
+ "victory-gpu",
  "victory-hle",
  "victory-loader",
  "victory-pe",
  "victory-shader",
  "walkdir",
+ "windows-sys",
 ]
 
 [[package]]

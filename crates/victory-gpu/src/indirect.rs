@@ -34,7 +34,7 @@ use windows::Win32::Graphics::Direct3D::ID3DBlob;
 use windows::Win32::Graphics::Direct3D12::*;
 use windows::core::s;
 
-use crate::host::{HostList, host, transition};
+use crate::host::{BUFFER_READ, HostList, host, transition};
 
 const SOURCE: &str = r#"
 #define RS "RootConstants(num32BitConstants=6, b0), SRV(t0), SRV(t1), UAV(u0), UAV(u1)"
@@ -351,6 +351,7 @@ pub(crate) fn bound(
 ) -> Option<ID3D12Resource> {
     let bytes = validate_layout(spec, src.1, count.map(|(_, off)| off))?;
     let (c, budget, dst) = (clamp()?, list.budget()?, list.indirect_scratch(bytes)?);
+    sources_read(list, src, count);
     clamp_into(list, c, &dst, budget, src, count, spec, false).then_some(dst)
 }
 
@@ -371,7 +372,18 @@ pub(crate) fn bound_ahead(
 ) -> Option<ID3D12Resource> {
     let bytes = validate_layout(spec, src.1, None)?;
     let (c, budget, dst) = (clamp()?, list.budget()?, list.indirect_scratch(bytes)?);
+    sources_read(list, src, None);
     clamp_into(list, c, &dst, budget, src, None, spec, true).then_some(dst)
+}
+
+/// The clamp is a command of its own that reads the title's arguments and
+/// count from their host copies (upstream VIctory #334's state tracking).
+fn sources_read(list: &HostList, src: (&ID3D12Resource, u64), count: Option<(&ID3D12Resource, u64)>) {
+    list.begin_command();
+    list.buffer_state(src.0, BUFFER_READ);
+    if let Some((c, _)) = count {
+        list.buffer_state(c, BUFFER_READ);
+    }
 }
 
 /// [`record_clamp_as`] into `list`'s scratch buffer `dst`, from the state
@@ -457,8 +469,8 @@ fn record_clamp_as(
     };
     let constants = [kind, stride, records, args_offset, has_count | (u32::from(ahead) << 1), count_offset];
     // SAFETY: an open list; our root signature and pipeline; live source,
-    // count, scratch destination, and budget buffers. `src` and `count` stay
-    // in `COMMON` / `GENERIC_READ` via implicit buffer promotion while `dst`
+    // count, scratch destination, and budget buffers. `src` and `count` are
+    // in `GENERIC_READ` (`sources_read`, host lists) while `dst`
     // transitions `before -> UNORDERED_ACCESS -> INDIRECT_ARGUMENT`. Moving
     // it out of `INDIRECT_ARGUMENT` orders this clamp's writes after every
     // earlier execution's reads of the scratch buffer; nothing else writes it.
@@ -903,6 +915,18 @@ pub(crate) fn check_hit(
         ]);
     }
     true
+}
+
+/// `VICTORY_WINDOW_BARRIER` (on unless 0): a draw served from a window first waits for every
+/// earlier shader write, as a fresh clamp does (its first step is that barrier). Windows alone
+/// lost the card in 3 of 3 runs here; with `VICTORY_INDIRECT_WINDOW_CHECK=1`, whose re-clamp
+/// before each window draw starts with this barrier, a 20-minute run held.
+pub(crate) fn window_barrier(list: &HostList) {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    if *ON.get_or_init(|| std::env::var_os("VICTORY_WINDOW_BARRIER").is_none_or(|v| v != "0")) {
+        // SAFETY: an open list; a UAV barrier on every resource.
+        unsafe { list.list.ResourceBarrier(&[uav_barrier()]) };
+    }
 }
 
 fn uav_barrier() -> D3D12_RESOURCE_BARRIER {

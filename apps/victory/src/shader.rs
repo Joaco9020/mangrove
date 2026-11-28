@@ -111,6 +111,16 @@ pub fn run(paths: Vec<PathBuf>, verbose: bool, disasm: bool) -> Result<()> {
                         t.with_native += 1;
                         let mut list = Vec::new();
                         for n in &programs {
+                            // `VICTORY_NATIVE_INDEX=<file>`: one line per native program, its
+                            // code's first 64 bytes as hex, its size, stage and container, so that
+                            // code found elsewhere (precompiled pipelines) can be matched.
+                            if let Some(file) = std::env::var_os("VICTORY_NATIVE_INDEX") {
+                                use std::io::Write;
+                                let head: String = n.code.iter().take(64).map(|b| format!("{b:02x}")).collect();
+                                if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(file) {
+                                    let _ = writeln!(f, "{head} {} {:?} {}{}", n.code.len(), n.stage, path.display(), source.label());
+                                }
+                            }
                             *t.native_stages.entry(n.stage).or_default() += 1;
                             list.push(format!("{:?} {} B", n.stage, n.code.len()));
                             match gfx10::decode(&n.code) {
