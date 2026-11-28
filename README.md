@@ -136,24 +136,25 @@ ray-tracing programs; they are saved for the next start. Known to be wrong
 still: some vehicles' paint comes out a flat lime green, and while
 travelling fast the ray programs' pages can lag behind.
 
-**Status, 27 November 2026, evening.** The frame rate is where the session
+**Status, 27 November 2026, night.** The frame rate is where the session
 above left it (about 10 to 12.6 frames a second with ray tracing on); no
 change since then has been shown to raise it, so none is published as a gain.
 What the day's work found and what is in hand:
 
-- *Slow first minutes after a start (found, fix in testing).* Since the
-  afternoon every start had the driver compiling several hundred compute
-  pipelines again, about 8 minutes in which the world ran at 2 to 9 frames a
-  second. Measured in the logs: 0 of 1,303 compute pipelines took over a
-  second in the session above, 406 did in a later one (3 to 10 s each), and
-  nearly all of them have six or more static samplers. The driver gives each
-  static sampler a place in a table in the order root signatures are first
-  made, a compiled pipeline carries the places, and the order differed from
-  start to start, so the driver's cache on disk did not answer.
-  VIctory-NVIDIA's commit `64d4931` describes the same cause, measured on
-  another card (`pipeline/samplers.rs` there). The fix here makes the
-  samplers in one kept order at every start; it goes up as soon as a second
-  start confirms it.
+- *Slow first minutes after a start: fixed* (`crates/victory-gpu/src/pipeline/sampler_order.rs`,
+  `VICTORY_SAMPLER_ORDER=0`: as before). Since the afternoon every start had
+  the driver compiling several hundred compute pipelines again, about 8
+  minutes in which the world ran at 2 to 9 frames a second. The driver gives
+  each static sampler a place in a table in the order root signatures are
+  first made, a compiled pipeline carries the places, and the order differed
+  from start to start, so the driver's cache on disk did not answer. Now
+  every static sampler a pipeline has had is listed in a file beside the
+  pipeline library and made in that order before the first root signature
+  that holds one. Measured on a GeForce RTX 4070: compute pipelines that took
+  over a second, 406 in a start before, 211 in the one start that compiled
+  them in the kept order, 0 of 1,314 in the next; all pipelines made 34
+  seconds after that start. VIctory-NVIDIA's commit `64d4931` describes the
+  same cause, measured on another card (`pipeline/samplers.rs` there).
 - *The card's ray-tracing hardware.* The title's ray walkers are its own
   loops over its own structures. A guide that lets the card's hardware find
   the candidates and leaves the title's own triangle test to decide is
