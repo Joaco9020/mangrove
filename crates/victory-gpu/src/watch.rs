@@ -4873,6 +4873,8 @@ mod many_askers_tests {
     /// its own asking or by one that took the kernel's answer before it).
     #[test]
     fn no_write_is_lost_between_askers() {
+        let _serial = super::test_serial();
+        let _serial = super::test_serial();
         const MEM_WRITE_WATCH: u32 = 0x20_0000;
         const PAGES: usize = 48;
         const THREADS: usize = 8;
@@ -4916,12 +4918,14 @@ mod many_askers_tests {
     /// again between.
     #[test]
     fn no_write_to_views_is_lost_between_askers() {
+        let _serial = super::test_serial();
         writes_to_views_are_not_lost::<1>(0, 0);
     }
 
     /// The same with blocks that rest after a write ([`super::rest`]).
     #[test]
     fn no_write_to_resting_views_is_lost_between_askers() {
+        let _serial = super::test_serial();
         writes_to_views_are_not_lost::<1>(50, 0);
         writes_to_views_are_not_lost::<3>(50, 0);
     }
@@ -4933,6 +4937,7 @@ mod many_askers_tests {
     /// for one address only, `VICTORY_VIEW_GUARD=0`.)
     #[test]
     fn no_write_through_another_view_is_lost_between_askers() {
+        let _serial = super::test_serial();
         writes_to_views_are_not_lost::<3>(0, 0);
     }
 
@@ -4941,6 +4946,7 @@ mod many_askers_tests {
     /// view and of three, resting and not.
     #[test]
     fn no_write_is_lost_when_faults_take_no_lock() {
+        let _serial = super::test_serial();
         const ALL: u32 = u32::MAX;
         const HALF: u32 = 0x5555_5555;
         writes_to_views_are_not_lost::<1>(0, ALL);
@@ -5107,6 +5113,7 @@ mod many_askers_tests {
     /// allocated there. A hole that is no placeholder's is asked about.
     #[test]
     fn holes_are_known_until_the_runtime_tells() {
+        let _serial = super::test_serial();
         use windows_sys::Win32::System::Threading::GetCurrentProcess;
         const BLOCKS: usize = 8;
         // SAFETY (all): a placeholder and a section of our own, which stay.
@@ -5190,6 +5197,7 @@ mod many_askers_tests {
     /// thread of its own as the runtime does it, while others ask about all
     /// of it: what was written, and that a page came or went, is told to
     /// whoever asks after it, and blocks are known by their bits meanwhile.
+    // Not under test_serial: with it this test hangs (cause not found yet); alone it does not interfere.
     #[test]
     fn no_mapping_is_lost_between_askers() {
         use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -5282,6 +5290,7 @@ mod many_askers_tests {
     /// The two tests around, with write faults that take no lock.
     #[test]
     fn bits_and_holes_with_faults_that_take_no_lock() {
+        let _serial = super::test_serial();
         super::UNLOCKED_IN_TEST.set(true);
         bits_go_with_the_guard();
         holes_are_known_until_the_runtime_tells();
@@ -5292,6 +5301,7 @@ mod many_askers_tests {
     /// or forgets it.
     #[test]
     fn bits_go_with_the_guard() {
+        let _serial = super::test_serial();
         // SAFETY: a view of a section of our own, which stays.
         let at = unsafe {
             let section =
@@ -5327,6 +5337,7 @@ mod many_askers_tests {
     /// A range's bits are all of its blocks', whatever lies beside them.
     #[test]
     fn bits_of_ranges() {
+        let _serial = super::test_serial();
         static BITS: super::Bits = super::Bits::new();
         let blocks = [0usize, 1, 63, 64, 65, 127, 128, 200, 65535, 65536, 65537, 1 << 20, (1 << 31) - 1];
         for &b in &blocks {
