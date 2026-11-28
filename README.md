@@ -136,6 +136,39 @@ ray-tracing programs; they are saved for the next start. Known to be wrong
 still: some vehicles' paint comes out a flat lime green, and while
 travelling fast the ray programs' pages can lag behind.
 
+**Status, 27 November 2026, evening.** The frame rate is where the session
+above left it (about 10 to 12.6 frames a second with ray tracing on); no
+change since then has been shown to raise it, so none is published as a gain.
+What the day's work found and what is in hand:
+
+- *Slow first minutes after a start (found, fix in testing).* Since the
+  afternoon every start had the driver compiling several hundred compute
+  pipelines again, about 8 minutes in which the world ran at 2 to 9 frames a
+  second. Measured in the logs: 0 of 1,303 compute pipelines took over a
+  second in the session above, 406 did in a later one (3 to 10 s each), and
+  nearly all of them have six or more static samplers. The driver gives each
+  static sampler a place in a table in the order root signatures are first
+  made, a compiled pipeline carries the places, and the order differed from
+  start to start, so the driver's cache on disk did not answer.
+  VIctory-NVIDIA's commit `64d4931` describes the same cause, measured on
+  another card (`pipeline/samplers.rs` there). The fix here makes the
+  samplers in one kept order at every start; it goes up as soon as a second
+  start confirms it.
+- *The card's ray-tracing hardware.* The title's ray walkers are its own
+  loops over its own structures. A guide that lets the card's hardware find
+  the candidates and leaves the title's own triangle test to decide is
+  written and gives the same rays on a test rig (about a quarter of the node
+  tests a ray). It has not run on a card yet, and by its own forecast it
+  does not reach 30 frames a second alone: ordinary drawing and the water's
+  light need their own work.
+- *Lime-green vehicles.* Read in the title's paint programs: the green is a
+  data value (a decal layer's paint colour picked through a mask texture),
+  not a lighting fault. Which input is wrong on the PC is not known yet; a
+  test that runs the title's program and its translation side by side on the
+  same inputs is being written.
+- Every change is now tried alone, one a session, against the session above
+  at equal draw counts, and published with the measured result.
+
 **This fork's earlier work** (up to commit `9a9091d1`) stays in this
 repository's history, with its own credits in the README of that commit.
 
